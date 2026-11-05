@@ -5,7 +5,19 @@ AI assisted legal documentation generator for business scope applications.
 
 This project is in progress. Development is expected to take approximately 1 week.
 
-The template dataset is in place. The application that will modify these templates for users has not been built yet.
+The template dataset is in place, and a prototype of the Mutual NDA creator is available in [`frontend/`](frontend/README.md). The other templates aren't available in the app yet.
+
+## Mutual NDA Creator
+
+Fill in a form, see the Mutual NDA update as you type, and download it as a PDF. Everything runs in the browser, so what you enter isn't sent anywhere or saved.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open [http://localhost:3000](http://localhost:3000). See the [frontend README](frontend/README.md) for tests and other commands.
 
 ## Legal Templates
 
