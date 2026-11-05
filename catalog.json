@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Mutual Non-Disclosure Agreement Cover Page",
+    "description": "Cover page for the Mutual NDA, where the parties record the deal-specific terms (purpose, effective date, MNDA term, term of confidentiality, governing law and jurisdiction, and any modifications) and sign. Incorporates the Mutual NDA Standard Terms by reference.",
+    "filename": "Mutual-NDA-coverpage.md"
+  },
+  {
+    "name": "Mutual Non-Disclosure Agreement Standard Terms",
+    "description": "Standard terms for a mutual NDA, under which each party may disclose confidential information to the other. Covers use and protection of confidential information, exceptions, legally required disclosures, term and termination, return or destruction, and equitable relief. Used with the Mutual NDA Cover Page.",
+    "filename": "Mutual-NDA.md"
+  },
+  {
+    "name": "Cloud Service Agreement",
+    "description": "Standard terms for selling and buying cloud software and SaaS products. Covers service access and use, restrictions, privacy and security, payment, term and termination, warranties, limitation of liability, indemnification, and confidentiality.",
+    "filename": "CSA.md"
+  },
+  {
+    "name": "Service Level Agreement",
+    "description": "Standard terms designed for use with the Cloud Service Agreement, setting target uptime and response time commitments and the remedies available when they are missed.",
+    "filename": "sla.md"
+  },
+  {
+    "name": "Data Processing Agreement",
+    "description": "Standard terms governing how a provider processes customer personal data as a processor or subprocessor. Covers processing, restricted international transfers, security incident response, audits and reports, and deletion of customer personal data.",
+    "filename": "DPA.md"
+  },
+  {
+    "name": "Design Partner Agreement",
+    "description": "Standard terms giving a partner early access to a product for internal business use in exchange for feedback. Covers fees and costs, term and termination, warranty disclaimers, confidentiality, and intellectual property.",
+    "filename": "design-partner-agreement.md"
+  },
+  {
+    "name": "Professional Services Agreement",
+    "description": "Standard terms for professional services performed under statements of work (SOWs). Covers services, intellectual property, privacy and security, payment, warranties, limitation of liability, indemnification, insurance, and confidentiality.",
+    "filename": "psa.md"
+  },
+  {
+    "name": "Partnership Agreement",
+    "description": "Standard terms for a business partnership in which each party performs agreed obligations. Covers cooperation and feedback, payment, trademark license, privacy, escalation procedure, term and termination, limitation of liability, and indemnification.",
+    "filename": "Partnership-Agreement.md"
+  },
+  {
+    "name": "Business Associate Agreement",
+    "description": "Standard terms governing how a business associate handles protected health information (PHI), including obligations and restrictions under the Privacy Rule, data rights, breach notification, and term and termination.",
+    "filename": "BAA.md"
+  },
+  {
+    "name": "Software License Agreement",
+    "description": "Standard terms for licensing software that the customer installs and uses. Covers the license grant, restrictions, payment, term and termination, warranties, limitation of liability, indemnification, and confidentiality.",
+    "filename": "Software-License-Agreement.md"
+  },
+  {
+    "name": "Pilot Agreement",
+    "description": "Standard terms for a short-term pilot, trial, or evaluation that lets a prospective customer test a product before a longer-term commitment. Covers pilot access, term and termination, warranty disclaimers, limitation of liability, and confidentiality.",
+    "filename": "Pilot-Agreement.md"
+  },
+  {
+    "name": "AI Addendum",
+    "description": "Addendum supplementing an existing agreement with terms for AI services included in a product. Covers use of AI services, input and output, model training, intellectual property and privacy, and AI-specific disclaimers.",
+    "filename": "AI-Addendum.md"
+  }
+]
