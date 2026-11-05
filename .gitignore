@@ -87,3 +87,4 @@ desktop.ini
 
 # ---------- Claude Code ----------
 .claude/settings.local.json
+.playwright-mcp/
