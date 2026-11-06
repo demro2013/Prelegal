@@ -41,7 +41,7 @@ function PreviewInline({ content }: { content: Inline[] }) {
             {inline.text}
           </span>
         ) : (
-          <mark key={index} className="bg-flag text-text px-0.5">
+          <mark key={index} className="bg-highlighter text-text px-0.5">
             {inline.text}
           </mark>
         );
@@ -81,7 +81,7 @@ function PartyTable({ block }: { block: Extract<Block, { type: "table" }> }) {
                   <td
                     key={cellIndex}
                     className={`border-text/70 border p-1.5 align-top wrap-anywhere sm:p-2 ${
-                      isBlankField(cell) ? "bg-flag/35" : ""
+                      isBlankField(cell) ? "bg-highlighter/40" : ""
                     } ${isSignature ? "h-16" : ""}`}
                   >
                     {isSignature && cellIndex > 0 ? (
@@ -164,7 +164,7 @@ function Sheet({ blocks, label }: { blocks: Block[]; label: string }) {
   return (
     <article
       aria-label={label}
-      className="bg-paper text-text mx-auto w-full max-w-[46rem] p-6 font-serif text-[1.0625rem] leading-[1.6] wrap-anywhere shadow-[0_1px_2px_rgb(0_0_0/0.3),0_14px_30px_-12px_rgb(0_0_0/0.55)] sm:p-12"
+      className="bg-paper text-text mx-auto w-full max-w-[46rem] p-6 font-serif text-[1.0625rem] leading-[1.6] wrap-anywhere border border-shell/25 sm:p-12"
     >
       {blocks.map((block, index) => (
         <PreviewBlock key={index} block={block} />
@@ -195,15 +195,15 @@ export function DocumentList({
   documents: DocumentDefinition[];
 }) {
   return (
-    <div className="bg-paper text-text mx-auto w-full max-w-[46rem] p-6 sm:p-12">
-      <h2 className="font-serif text-[1.75rem] leading-tight font-semibold">
+    <div className="mx-auto w-full max-w-[46rem]">
+      <h2 className="font-display text-shell text-5xl leading-none font-extrabold">
         Documents I can draft
       </h2>
-      <ul className="mt-5 flex flex-col gap-4">
+      <ul className="border-shell mt-6 border-t-2">
         {documents.map(({ id, name, summary }) => (
-          <li key={id}>
-            <p className="font-semibold">{name}</p>
-            <p className="text-muted">{summary}</p>
+          <li key={id} className="border-shell/25 border-b py-3.5">
+            <p className="text-shell font-semibold">{name}</p>
+            <p className="text-muted mt-0.5">{summary}</p>
           </li>
         ))}
       </ul>

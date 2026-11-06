@@ -5,11 +5,11 @@ AI assisted legal documentation generator for business scope applications.
 
 This project is in progress. Development is expected to take approximately 1 week.
 
-The template dataset is in place, and all 11 document types can be created through AI chat. User accounts aren't available yet.
+The template dataset is in place, all 11 document types can be created through AI chat, and users sign up and log in. **Accounts are temporary: the database is recreated each time the container starts, which deletes every account.** It isn't ready for real customers until that changes.
 
 ## Creating a Document
 
-Tell the AI assistant what you need. It recommends a document, or explains if it can't generate what you asked for and offers the closest match. It then guides you through the details, the agreement fills in as you go, and you download it as a PDF.
+Log in and tell the AI assistant what you need. It recommends a document, or explains if it can't generate what you asked for and offers the closest match. It then asks for each required detail in turn, the agreement fills in as you go, and you download it as a PDF.
 
 Your messages and the agreement's details are sent through the backend to an AI provider (OpenRouter, using Cerebras) to produce each reply. Prelegal doesn't save them, and a page refresh starts over.
 
@@ -25,7 +25,13 @@ You need Docker. Copy `.env.example` to `.env`, set `OPENROUTER_API_KEY`, and ru
 | Linux | `scripts/start-linux.sh` | `scripts/stop-linux.sh` |
 | Windows | `scripts/start-windows.ps1` | `scripts/stop-windows.ps1` |
 
-Then open [http://localhost:8000](http://localhost:8000). The FastAPI backend serves the frontend from a single container. Its SQLite database is created from scratch each time the container starts, so don't keep anything there that you need to retain.
+Then open [http://localhost:8000](http://localhost:8000) and create an account. The FastAPI backend serves the frontend from a single container. Its SQLite database is created from scratch each time the container starts, so you'll need to sign up again after a restart.
+
+Before running it anywhere public:
+
+- **Use HTTPS, and remove `PRELEGAL_COOKIE_SECURE` from `docker-compose.yml`,** so session cookies are only sent over encrypted connections. It's there because local use is plain HTTP.
+- **Know the limits:** login attempts, signups and chat messages are limited in memory, per process, so run one worker. Anyone can still sign up, and each new account gets its own chat allowance, which spends your OpenRouter credit.
+- **Passwords can't be reset,** because the app doesn't send email.
 
 ## Development
 
@@ -36,9 +42,7 @@ Then open [http://localhost:8000](http://localhost:8000). The FastAPI backend se
 | --- | --- |
 | `uv run pytest` | Runs the tests, without calling the real model |
 | `uv run --env-file ../.env pytest -m live` | Tests the real model, which costs a little credit |
-| `uv run --env-file ../.env uvicorn app.main:app --port 8000` | Starts the backend on its own |
-
-The chat endpoint has no sign in or rate limit yet, so anyone who can reach the app can spend your OpenRouter credit. Don't expose it publicly.
+| `PRELEGAL_COOKIE_SECURE=false uv run --env-file ../.env uvicorn app.main:app --port 8000` | Starts the backend on its own |
 
 ## Legal Templates
 

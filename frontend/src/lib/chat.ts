@@ -1,3 +1,4 @@
+import { apiRequest } from "./api";
 import type { Values } from "./documents";
 
 export type ChatMessage = {
@@ -25,32 +26,24 @@ export const GREETING = `Hi! What type of document would you like to create? For
 
 Or just tell me what you’re trying to do, and I’ll recommend the right one.`;
 
-/** Empty in production, where the backend serves the frontend. */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
-
 /** Earlier details survive trimming because `values` holds them. */
 const MAX_MESSAGES = 40;
 
-export async function sendChat(
+export function sendChat(
   messages: ChatMessage[],
   documentType: string | null,
   values: Values,
   today: string,
 ): Promise<ChatTurn> {
-  const response = await fetch(`${API_BASE}/api/chat`, {
+  return apiRequest("/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    body: {
       messages: messages.slice(-MAX_MESSAGES),
       documentType,
       values,
       today,
-    }),
+    },
   });
-  if (!response.ok) {
-    throw new Error(`Chat request failed with status ${response.status}`);
-  }
-  return response.json();
 }
 
 export function applyUpdates(values: Values, updates: FieldUpdate[]): Values {

@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -66,6 +67,17 @@ def load_documents(path: Path) -> dict[str, DocumentDefinition]:
 
 
 DOCUMENTS = load_documents(config.DOCUMENTS_PATH)
+
+
+def with_defaults(
+    document: DocumentDefinition, values: dict[str, str], today: date
+) -> dict[str, str]:
+    """Fills empty fields with their defaults, as the browser does for the preview."""
+    filled = dict(values)
+    for field in document.fields:
+        if field.default and not filled.get(field.key, "").strip():
+            filled[field.key] = str(today) if field.default == "today" else field.default
+    return filled
 
 
 def is_required(field: FieldDefinition, values: dict[str, str]) -> bool:

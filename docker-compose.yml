@@ -8,6 +8,9 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # Local use is plain HTTP. Remove this behind HTTPS.
+      PRELEGAL_COOKIE_SECURE: "false"
     healthcheck:
       test:
         - CMD

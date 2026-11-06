@@ -4,7 +4,8 @@ import type { ChatMessage } from "@/lib/chat";
 type ChatPaneProps = {
   messages: ChatMessage[];
   isPending: boolean;
-  hasFailed: boolean;
+  /** What went wrong with the last message, if anything. */
+  error: string | null;
   /** True while a reply or the PDF is in progress, so the agreement can't change. */
   isLocked: boolean;
   onSend: (text: string) => void;
@@ -14,7 +15,7 @@ type ChatPaneProps = {
 export function ChatPane({
   messages,
   isPending,
-  hasFailed,
+  error,
   isLocked,
   onSend,
   onRetry,
@@ -25,7 +26,7 @@ export function ChatPane({
   useEffect(() => {
     const log = logRef.current;
     if (log) log.scrollTop = log.scrollHeight;
-  }, [messages, isPending, hasFailed]);
+  }, [messages, isPending, error]);
 
   function send() {
     const text = draft.trim();
@@ -47,30 +48,35 @@ export function ChatPane({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // The minimum height keeps the message box's space reserved in a short window,
+    // while the conversation scrolls inside whatever height is left.
+    <div className="flex min-h-64 flex-1 flex-col lg:h-0">
       <div
         ref={logRef}
         role="log"
         aria-label="Conversation"
         tabIndex={0}
-        className="flex max-h-[40dvh] min-h-48 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-4 sm:px-8 lg:max-h-none lg:min-h-24"
+        className="flex max-h-[40dvh] min-h-48 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-4 sm:px-8 lg:max-h-none lg:min-h-0"
       >
         {messages.map((message, index) => (
           <p
             key={index}
             className={
               message.role === "user"
-                ? "bg-ink ml-8 self-end px-3 py-2 break-words whitespace-pre-wrap text-white"
-                : "bg-paper border-text/15 mr-8 self-start border px-3 py-2 break-words whitespace-pre-wrap"
+                ? "reply-flag ml-8 self-end break-words whitespace-pre-wrap"
+                : "break-words whitespace-pre-wrap"
             }
           >
-            {message.content}
+            <span className="sr-only">
+              {message.role === "user" ? "You said: " : "The assistant said: "}
+            </span>
+            <span>{message.content}</span>
           </p>
         ))}
-        {isPending && <p className="text-muted">The assistant is replying…</p>}
-        {hasFailed && (
-          <div role="alert" className="text-error font-medium">
-            <p>The assistant couldn’t reply.</p>
+        {isPending && <p className="text-shell-muted">The assistant is replying…</p>}
+        {error && (
+          <div role="alert" className="text-error-soft font-medium">
+            <p>{error}</p>
             <button
               type="button"
               onClick={onRetry}
@@ -83,7 +89,7 @@ export function ChatPane({
       </div>
       <form
         onSubmit={handleSubmit}
-        className="border-text/15 flex items-end gap-2 border-t px-6 py-4 sm:px-8"
+        className="border-shell-line flex items-end gap-2 border-t px-6 py-4 sm:px-8"
       >
         <div className="min-w-0 flex-1">
           <label htmlFor="chat-message" className="sr-only">
@@ -97,13 +103,13 @@ export function ChatPane({
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type your answer…"
-            className="field-input mt-0 resize-none"
+            className="field-input resize-none"
           />
         </div>
         <button
           type="submit"
           disabled={isLocked}
-          className="bg-ink hover:bg-ink-dark cursor-pointer px-4 py-2 font-semibold text-white transition-colors disabled:cursor-wait disabled:opacity-70"
+          className="bg-highlighter text-shell cursor-pointer px-4 py-2 font-semibold disabled:cursor-wait disabled:opacity-70"
         >
           Send
         </button>

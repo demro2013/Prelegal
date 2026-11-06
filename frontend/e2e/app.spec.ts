@@ -64,6 +64,9 @@ async function chooseNda(page: Page, updates: Record<string, string> = {}) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({ json: { email: "ada@acme.example" } }),
+  );
   await page.goto("/");
 });
 
@@ -328,11 +331,30 @@ test("offers a retry when the template can't load, without repeating the message
 
 test("applies the stylesheet", async ({ page }) => {
   await chooseNda(page);
-  await expect(preview(page)).toHaveCSS("background-color", "rgb(35, 71, 59)");
-  await expect(page.getByRole("button", { name: "Download PDF" })).toHaveCSS(
+  await expect(preview(page)).toHaveCSS("background-color", "rgb(233, 234, 244)");
+  await expect(page.getByRole("button", { name: "Send" })).toHaveCSS(
     "background-color",
-    "rgb(27, 63, 168)",
+    "rgb(246, 255, 77)",
   );
+});
+
+test("shows how many details are left, and highlights the download when ready", async ({
+  page,
+}) => {
+  await mockChat(
+    page,
+    { documentType: "mutual-nda", updates: { governingLaw: "Delaware" } },
+    { updates: NDA_FIELDS },
+  );
+  const download = page.getByRole("button", { name: "Download PDF" });
+
+  await say(page, "An NDA");
+  await expect(page.getByText("9 details still needed")).toBeVisible();
+  await expect(download).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+  await say(page, "Here are the rest");
+  await expect(page.getByText("Ready to download")).toBeVisible();
+  await expect(download).toHaveCSS("background-color", "rgb(246, 255, 77)");
 });
 
 test("fits a phone screen without horizontal scrolling", async ({ page }) => {

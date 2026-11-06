@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, Source_Serif_4 } from "next/font/google";
+import {
+  Big_Shoulders,
+  Schibsted_Grotesk,
+  Source_Serif_4,
+} from "next/font/google";
 import "./globals.css";
 
-const instrumentSans = Instrument_Sans({
-  variable: "--font-instrument-sans",
+const bigShoulders = Big_Shoulders({
+  variable: "--font-big-shoulders",
+  subsets: ["latin"],
+});
+
+const schibsted = Schibsted_Grotesk({
+  variable: "--font-schibsted",
   subsets: ["latin"],
 });
 
@@ -22,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${instrumentSans.variable} ${sourceSerif.variable}`}
+      className={`${bigShoulders.variable} ${schibsted.variable} ${sourceSerif.variable}`}
     >
       <body>{children}</body>
     </html>

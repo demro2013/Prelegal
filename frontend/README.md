@@ -2,7 +2,7 @@
 
 A Next.js app for creating legal agreements. Chat with the AI assistant, see the agreement fill in as you go, and download it as a PDF.
 
-The app is a static site, which the FastAPI backend serves in production. Each chat message goes to the backend's `/api/chat` endpoint with the conversation, the chosen document and its current values. Nothing is saved, and the PDF is generated in the browser.
+The app is a static site, which the FastAPI backend serves in production. `/login/` and `/signup/` are public, and `/` redirects to login until the backend confirms a session. Each chat message goes to the backend's `/api/chat` endpoint with the conversation, the chosen document and its current values. Conversations aren't saved, and the PDF is generated in the browser.
 
 ## Run it
 
@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000), using `localhost` rather than `127.0.0.1` so the session cookie and CORS both work.
 
 ## Other commands
 
