@@ -1,0 +1,14 @@
+.git
+.claude
+.playwright-mcp
+**/.env
+**/.env.*
+**/__pycache__
+**/*.db
+backend/.venv
+backend/.pytest_cache
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/test-results
+frontend/*.tsbuildinfo
