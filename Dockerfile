@@ -24,7 +24,8 @@ COPY backend/app app
 COPY --from=frontend /build/frontend/out static
 ENV PATH="/app/.venv/bin:$PATH" \
     PRELEGAL_DB_PATH=/tmp/prelegal.db \
-    PRELEGAL_STATIC_DIR=/app/static
+    PRELEGAL_STATIC_DIR=/app/static \
+    PRELEGAL_CORS_ORIGINS=
 USER prelegal
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
