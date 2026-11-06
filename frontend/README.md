@@ -2,7 +2,7 @@
 
 A Next.js prototype for creating a Mutual NDA. Fill in the form, see the agreement update as you type, and download it as a PDF.
 
-The app is a static site with no backend. What someone enters stays in their browser and isn't saved, and the PDF is generated in the browser.
+The app is a static site, which the FastAPI backend serves in production. It doesn't call the backend, so what someone enters stays in their browser and isn't saved, and the PDF is generated in the browser.
 
 ## Run it
 
