@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation is a Mutual NDA form served by the FastAPI backend from a Docker container. AI chat, the other document types, user authentication and document persistence aren't built yet.
+The current implementation creates a Mutual NDA through AI chat, served by the FastAPI backend from a Docker container. The other document types, user authentication and document persistence aren't built yet.
 
 ## Development process
 
@@ -63,3 +63,9 @@ After you finish each Jira task and the task has been marked for completion, upd
 **Status:** Complete
 
 Built the technical foundation for V1 with no product feature changes. `backend/` is a uv FastAPI project with a `create_app` factory, `GET /api/health`, and the static frontend mounted last at `/`. Each startup deletes and recreates the SQLite database with an empty `users` table (stdlib `sqlite3`); sign up and sign in endpoints and UI aren't built yet. A multi-stage `Dockerfile` builds the frontend and runs as a non-root user, and `docker-compose.yml` passes `.env` at runtime with a healthcheck. `scripts/` has start and stop scripts for Mac, Linux and Windows. Backend tests run with `cd backend && uv run pytest`.
+
+## KAN-7
+
+**Status:** Complete
+
+Replaced the Mutual NDA form with a freeform AI chat beside the live preview. `POST /api/chat` (`backend/app/routes/chat.py`) takes the message history, current values and today's date, and returns a reply plus field updates, where null means no change. It's stateless: the browser holds the conversation, and nothing is saved or logged. `backend/app/llm.py` is the only module that imports LiteLLM and calls the model through OpenRouter and Cerebras with Structured Outputs. `chat_schema.py` holds the schemas and drops unusable values (blanks, invalid years and dates), and `prompts/mnda.py` holds the system prompt. In the frontend, `ChatPane` is the conversation UI, `lib/chat.ts` sends messages and merges updates, and `validateMnda` still gates the PDF download. `next dev` reaches the backend through `NEXT_PUBLIC_API_BASE` and CORS. Playwright tests mock the chat API, and `uv run --env-file ../.env pytest -m live` tests the real model.
