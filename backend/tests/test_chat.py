@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import date
 from types import SimpleNamespace
 
 import litellm
@@ -7,27 +8,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import llm
-from app.chat_schema import ChatTurn, MndaUpdates, PartyUpdate
+from app.chat_schema import ChatTurn, FieldUpdate
+from app.documents import DOCUMENTS
 from app.main import create_app
+from app.prompts.document import build_system_prompt
 
-PARTY = {"name": "", "title": "", "company": "", "noticeAddress": ""}
-VALUES = {
-    "purpose": "Evaluating a partnership.",
-    "effectiveDate": "2026-11-05",
-    "termType": "fixed",
-    "termYears": "1",
-    "confidentialityType": "fixed",
-    "confidentialityYears": "1",
-    "governingLaw": "",
-    "jurisdiction": "",
-    "modifications": "",
-    "parties": [PARTY, PARTY],
-}
+VALUES = {"governingLaw": "Oregon", "party1.company": "Acme Corp"}
 
 
 def body(**overrides):
     return {
         "messages": [{"role": "user", "content": "SECRET-MESSAGE Acme Corp"}],
+        "documentType": "pilot-agreement",
         "values": VALUES,
         "today": "2026-11-05",
         **overrides,
@@ -45,39 +37,51 @@ def client(tmp_path, monkeypatch):
         yield client
 
 
-def stub_turn(monkeypatch, updates=None, reply="Who is the other party?"):
+def updates(*pairs):
+    return [FieldUpdate(key=key, value=value) for key, value in pairs]
+
+
+def stub_turns(monkeypatch, *turns):
+    """Answers each model call with the next turn. The last one repeats."""
     calls = []
 
     def complete_chat(messages):
         calls.append(messages)
-        return ChatTurn(reply=reply, updates=updates or MndaUpdates())
+        return turns[min(len(calls) - 1, len(turns) - 1)]
 
     monkeypatch.setattr(llm, "complete_chat", complete_chat)
     return calls
 
 
-def test_returns_the_reply_and_updates(client, monkeypatch):
-    stub_turn(
-        monkeypatch,
-        MndaUpdates(governingLaw="Delaware", party1=PartyUpdate(company="Acme Corp")),
-    )
+def stub_updates(monkeypatch, *pairs):
+    return stub_turns(monkeypatch, ChatTurn(reply="Next?", updates=updates(*pairs)))
+
+
+def returned(client, **overrides):
+    data = client.post("/api/chat", json=body(**overrides)).json()
+    return {update["key"]: update["value"] for update in data["updates"]}
+
+
+def test_returns_the_reply_document_and_updates(client, monkeypatch):
+    stub_updates(monkeypatch, ("pilotPeriod", "60 days"), ("party1.company", "Acme Corp"))
 
     response = client.post("/api/chat", json=body())
 
     assert response.status_code == 200
-    data = response.json()
-    assert data["reply"] == "Who is the other party?"
-    assert data["updates"]["governingLaw"] == "Delaware"
-    assert data["updates"]["jurisdiction"] is None
-    assert data["updates"]["party1"]["company"] == "Acme Corp"
-    assert data["updates"]["party2"] is None
+    assert response.json() == {
+        "reply": "Next?",
+        "documentType": "pilot-agreement",
+        "updates": [
+            {"key": "pilotPeriod", "value": "60 days"},
+            {"key": "party1.company", "value": "Acme Corp"},
+        ],
+    }
 
 
 def test_sends_a_system_prompt_with_values_and_date_then_the_history(client, monkeypatch):
-    calls = stub_turn(monkeypatch)
-    values = {**VALUES, "governingLaw": "Oregon"}
+    calls = stub_updates(monkeypatch)
 
-    client.post("/api/chat", json=body(values=values, today="2030-02-03"))
+    client.post("/api/chat", json=body(today="2030-02-03"))
 
     system, user = calls[0]
     assert system["role"] == "system"
@@ -86,58 +90,113 @@ def test_sends_a_system_prompt_with_values_and_date_then_the_history(client, mon
     assert user == {"role": "user", "content": "SECRET-MESSAGE Acme Corp"}
 
 
-@pytest.mark.parametrize("field", ["purpose", "governingLaw", "jurisdiction"])
-def test_blank_text_cannot_wipe_a_required_field(client, monkeypatch, field):
-    stub_turn(monkeypatch, MndaUpdates(**{field: "   "}))
-    assert client.post("/api/chat", json=body()).json()["updates"][field] is None
+def test_no_document_chosen_keeps_none_and_applies_no_updates(client, monkeypatch):
+    stub_updates(monkeypatch, ("party1.company", "Acme Corp"))
+
+    data = client.post("/api/chat", json=body(documentType=None, values={})).json()
+
+    assert data["documentType"] is None
+    assert data["updates"] == []
 
 
-def test_blank_cannot_wipe_a_party_field(client, monkeypatch):
-    stub_turn(monkeypatch, MndaUpdates(party1=PartyUpdate(name=" ", company="Acme")))
-    party = client.post("/api/chat", json=body()).json()["updates"]["party1"]
-    assert party["name"] is None
-    assert party["company"] == "Acme"
+def test_choosing_a_document_asks_again_with_its_fields(client, monkeypatch):
+    calls = stub_turns(
+        monkeypatch,
+        ChatTurn(reply="Sure", documentType="service-level-agreement"),
+        ChatTurn(reply="Let's start.", updates=updates(("targetUptime", "99.9%"))),
+    )
+
+    data = client.post(
+        "/api/chat",
+        json=body(documentType=None, values={"party1.company": "Acme", "other": "x"}),
+    ).json()
+
+    assert data == {
+        "reply": "Let's start.",
+        "documentType": "service-level-agreement",
+        "updates": [{"key": "targetUptime", "value": "99.9%"}],
+    }
+    assert len(calls) == 2
+    second_prompt = calls[1][0]["content"]
+    assert "targetUptime" in second_prompt
+    assert "just chose this document" in second_prompt
+    assert "Acme" in second_prompt
 
 
-def test_blank_can_clear_modifications(client, monkeypatch):
-    stub_turn(monkeypatch, MndaUpdates(modifications="  "))
-    assert client.post("/api/chat", json=body()).json()["updates"]["modifications"] == ""
+def test_switching_documents_passes_only_the_parties_along(client, monkeypatch):
+    calls = stub_turns(
+        monkeypatch,
+        ChatTurn(reply="Sure", documentType="ai-addendum"),
+        ChatTurn(reply="Which agreement does this attach to?"),
+    )
+
+    data = client.post("/api/chat", json=body()).json()
+
+    assert data["documentType"] == "ai-addendum"
+    second_prompt = calls[1][0]["content"]
+    assert "Acme Corp" in second_prompt
+    assert "Oregon" not in second_prompt
+
+
+def test_the_same_document_doesnt_ask_again(client, monkeypatch):
+    calls = stub_turns(monkeypatch, ChatTurn(reply="Next?", documentType="pilot-agreement"))
+    client.post("/api/chat", json=body())
+    assert len(calls) == 1
+
+
+def test_an_unknown_document_from_the_model_is_ignored(client, monkeypatch):
+    calls = stub_turns(monkeypatch, ChatTurn(reply="Hmm", documentType="employment-contract"))
+
+    data = client.post("/api/chat", json=body()).json()
+
+    assert data["documentType"] == "pilot-agreement"
+    assert len(calls) == 1
+
+
+def test_unknown_keys_and_other_documents_fields_are_dropped(client, monkeypatch):
+    stub_updates(monkeypatch, ("targetUptime", "99.9%"), ("made.up", "x"), ("pilotPeriod", "60 days"))
+    assert returned(client) == {"pilotPeriod": "60 days"}
+
+
+def test_null_values_are_dropped(client, monkeypatch):
+    stub_updates(monkeypatch, ("pilotPeriod", None))
+    assert returned(client) == {}
+
+
+@pytest.mark.parametrize("key", ["governingLaw", "pilotPeriod", "party1.name"])
+def test_blank_cannot_wipe_a_required_value(client, monkeypatch, key):
+    stub_updates(monkeypatch, (key, "   "))
+    assert returned(client) == {}
+
+
+def test_blank_can_clear_an_optional_field(client, monkeypatch):
+    stub_updates(monkeypatch, ("fees", "  "))
+    assert returned(client) == {"fees": ""}
 
 
 def test_text_is_trimmed(client, monkeypatch):
-    stub_turn(monkeypatch, MndaUpdates(governingLaw="  Delaware "))
-    assert client.post("/api/chat", json=body()).json()["updates"]["governingLaw"] == "Delaware"
+    stub_updates(monkeypatch, ("governingLaw", "  Delaware "))
+    assert returned(client) == {"governingLaw": "Delaware"}
 
 
 def test_replaces_lookalike_characters_the_pdf_cannot_print(client, monkeypatch):
-    stub_turn(
+    stub_updates(
         monkeypatch,
-        MndaUpdates(
-            purpose="A joint‑product review",
-            modifications="Section 3 is non‐exclusive",
-            party1=PartyUpdate(company="Acme Corp"),
-        ),
+        ("product", "A joint‑product review"),
+        ("fees", "Section 3 is non‐refundable"),
+        ("party1.company", "Acme Corp"),
     )
-    updates = client.post("/api/chat", json=body()).json()["updates"]
-    assert updates["purpose"] == "A joint-product review"
-    assert updates["modifications"] == "Section 3 is non-exclusive"
-    assert updates["party1"]["company"] == "Acme Corp"
+    assert returned(client) == {
+        "product": "A joint-product review",
+        "fees": "Section 3 is non-refundable",
+        "party1.company": "Acme Corp",
+    }
 
 
 def test_overlong_values_are_dropped_so_later_requests_stay_valid(client, monkeypatch):
     too_long = "x" * 5001
-    stub_turn(
-        monkeypatch,
-        MndaUpdates(
-            purpose=too_long,
-            modifications=too_long,
-            party1=PartyUpdate(name=too_long),
-        ),
-    )
-    updates = client.post("/api/chat", json=body()).json()["updates"]
-    assert updates["purpose"] is None
-    assert updates["modifications"] is None
-    assert updates["party1"]["name"] is None
+    stub_updates(monkeypatch, ("product", too_long), ("fees", too_long), ("party1.name", too_long))
+    assert returned(client) == {}
 
 
 @pytest.mark.parametrize(
@@ -153,14 +212,12 @@ def test_overlong_values_are_dropped_so_later_requests_stay_valid(client, monkey
     ],
 )
 def test_invalid_years_are_dropped(client, monkeypatch, years, expected):
-    stub_turn(monkeypatch, MndaUpdates(termYears=years, confidentialityYears=years))
-    updates = client.post("/api/chat", json=body()).json()["updates"]
-    assert updates["termYears"] == expected
-    assert updates["confidentialityYears"] == expected
+    stub_updates(monkeypatch, ("termYears", years))
+    assert returned(client, documentType="mutual-nda").get("termYears") == expected
 
 
 @pytest.mark.parametrize(
-    ("date", "expected"),
+    ("value", "expected"),
     [
         ("2027-01-31", "2027-01-31"),
         ("2027-02-30", None),
@@ -172,13 +229,18 @@ def test_invalid_years_are_dropped(client, monkeypatch, years, expected):
         ("next week", None),
     ],
 )
-def test_invalid_dates_are_dropped(client, monkeypatch, date, expected):
-    stub_turn(monkeypatch, MndaUpdates(effectiveDate=date))
-    assert client.post("/api/chat", json=body()).json()["updates"]["effectiveDate"] == expected
+def test_invalid_dates_are_dropped(client, monkeypatch, value, expected):
+    stub_updates(monkeypatch, ("effectiveDate", value))
+    assert returned(client).get("effectiveDate") == expected
+
+
+def test_choice_values_must_be_allowed(client, monkeypatch):
+    stub_updates(monkeypatch, ("termType", "forever"), ("confidentialityType", "perpetual"))
+    assert returned(client, documentType="mutual-nda") == {"confidentialityType": "perpetual"}
 
 
 def test_missing_key_returns_503_without_calling_the_model(client, monkeypatch):
-    calls = stub_turn(monkeypatch)
+    calls = stub_updates(monkeypatch)
     monkeypatch.delenv("OPENROUTER_API_KEY")
 
     assert client.post("/api/chat", json=body()).status_code == 503
@@ -197,16 +259,16 @@ def test_provider_failure_returns_502_without_details(client, monkeypatch):
     assert "SECRET-PROVIDER-TEXT" not in response.text
 
 
-VALID_TURN = '{"reply": "Hello", "updates": {}}'
+VALID_TURN = '{"reply": "Hello", "documentType": null, "updates": []}'
 
 
 @pytest.mark.parametrize(
     "bad",
     [
         "not json",
-        '{"updates": {}}',
-        '{"reply": "  ", "updates": {}}',
-        '{"reply": "' + "x" * 8001 + '", "updates": {}}',
+        '{"updates": []}',
+        '{"reply": "  ", "updates": []}',
+        '{"reply": "' + "x" * 8001 + '", "updates": []}',
         None,
     ],
 )
@@ -258,14 +320,14 @@ def test_calls_the_model_as_the_project_requires(client, monkeypatch):
         {"messages": [{"role": "user", "content": ""}]},
         {"messages": [{"role": "user", "content": "x" * 8001}]},
         {"messages": [{"role": "user", "content": "x"}] * 41},
-        {"values": {**VALUES, "purpose": "x" * 5001}},
-        {"values": {**VALUES, "parties": [PARTY]}},
-        {"values": {**VALUES, "termType": "forever"}},
+        {"values": {"purpose": "x" * 5001}},
+        {"values": {f"key{index}": "x" for index in range(101)}},
+        {"documentType": "employment-contract"},
         {"today": "soon"},
     ],
 )
 def test_invalid_requests_return_422_without_calling_the_model(client, monkeypatch, overrides):
-    calls = stub_turn(monkeypatch)
+    calls = stub_updates(monkeypatch)
 
     assert client.post("/api/chat", json=body(**overrides)).status_code == 422
     assert calls == []
@@ -300,15 +362,45 @@ def test_cors_allows_the_dev_frontend_only(client):
     assert "access-control-allow-origin" not in preflight("https://evil.example").headers
 
 
+def test_prompt_without_a_document_lists_all_of_them_and_explains_unsupported_requests():
+    prompt = build_system_prompt(None, {}, date(2026, 11, 5))
+    for document in DOCUMENTS.values():
+        assert document.id in prompt
+    assert "can't generate" in prompt
+    assert "Still needed" not in prompt
+
+
+def test_prompt_with_a_document_names_roles_and_whats_still_needed():
+    prompt = build_system_prompt(
+        DOCUMENTS["business-associate-agreement"],
+        {"parentAgreement": "MSA dated 2026-01-01"},
+        date(2026, 11, 5),
+    )
+    assert "Provider (The business associate" in prompt
+    assert "party2.company" in prompt
+    assert "MSA dated 2026-01-01" in prompt
+    still_needed = next(line for line in prompt.splitlines() if line.startswith("Still needed"))
+    assert "Breach Notification Period" in still_needed
+    assert "Agreement" not in still_needed.replace("Associate Agreement", "")
+
+
+def test_prompt_only_includes_the_current_documents_values():
+    prompt = build_system_prompt(
+        DOCUMENTS["ai-addendum"], {"targetUptime": "OTHER-DOCUMENT"}, date(2026, 11, 5)
+    )
+    assert "OTHER-DOCUMENT" not in prompt
+
+
 @pytest.mark.live
 @pytest.mark.skipif(not os.environ.get("OPENROUTER_API_KEY"), reason="needs OPENROUTER_API_KEY")
 def test_real_model_returns_a_usable_turn():
     """Costs a little credit. Run with: uv run --env-file ../.env pytest -m live"""
+    system = build_system_prompt(DOCUMENTS["pilot-agreement"], {}, date(2026, 11, 5))
     turn = llm.complete_chat(
         [
-            {"role": "system", "content": "Fill in the updates from what the user states."},
-            {"role": "user", "content": "The governing law is Delaware."},
+            {"role": "system", "content": system},
+            {"role": "user", "content": "The pilot lasts 60 days."},
         ]
     )
     assert turn.reply
-    assert turn.updates.governingLaw == "Delaware"
+    assert [update.key for update in turn.updates] == ["pilotPeriod"]

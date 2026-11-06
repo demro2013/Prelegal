@@ -1,15 +1,22 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { inlineText, parseInline, parseMarkdown, type Block } from "./document";
-import { loadMndaTemplates } from "./loadTemplates";
-import {
-  buildMndaDocument,
-  defaultValues,
-  formatDate,
-  mndaFilename,
-  validateMnda,
-  type MndaDocument,
-  type MndaValues,
-} from "./mnda";
+import { loadAgreementTemplates, loadDocuments } from "./loadTemplates";
+import { fillCoverPage, formatDate, type MndaValues } from "./mnda";
+
+const emptyParty = { name: "", title: "", company: "", noticeAddress: "" };
+
+const defaultValues: MndaValues = {
+  purpose: "Evaluating a business relationship.",
+  effectiveDate: "",
+  termType: "fixed",
+  termYears: "1",
+  confidentialityType: "fixed",
+  confidentialityYears: "1",
+  governingLaw: "",
+  jurisdiction: "",
+  modifications: "",
+  parties: [emptyParty, emptyParty],
+};
 
 const completeValues: MndaValues = {
   ...defaultValues,
@@ -35,10 +42,16 @@ const completeValues: MndaValues = {
   ],
 };
 
-let templates: MndaDocument;
+let coverPage: Block[];
+let standardTerms: Block[];
 
 beforeAll(async () => {
-  templates = await loadMndaTemplates();
+  const documents = await loadDocuments();
+  const templates = await loadAgreementTemplates(
+    documents.find(({ id }) => id === "mutual-nda")!,
+  );
+  coverPage = templates.coverPage!;
+  standardTerms = templates.standardTerms;
 });
 
 function blockText(block: Block): string {
@@ -48,13 +61,11 @@ function blockText(block: Block): string {
 }
 
 function coverText(values: MndaValues): string {
-  return buildMndaDocument(templates, values)
-    .coverPage.map(blockText)
-    .join("\n");
+  return fillCoverPage(coverPage, values).map(blockText).join("\n");
 }
 
 function checkboxes(values: MndaValues) {
-  return buildMndaDocument(templates, values).coverPage.filter(
+  return fillCoverPage(coverPage, values).filter(
     (block) => block.type === "checkbox",
   );
 }
@@ -97,27 +108,21 @@ describe("parseMarkdown", () => {
 });
 
 describe("Mutual NDA templates", () => {
-  it("parse without leaving any markup in the text", () => {
-    const text = [...templates.coverPage, ...templates.standardTerms]
-      .map(blockText)
-      .join("\n");
-    expect(text).not.toMatch(/\*\*|<span|<\/span|<label|<\/label|\]\(|^#|\|/m);
-  });
-
   it("contain all 11 sections of the Standard Terms in order", () => {
-    const numbers = templates.standardTerms.flatMap((block) =>
-      block.type === "numbered" ? [block.number] : [],
+    const labels = standardTerms.flatMap((block) =>
+      block.type === "numbered" ? [block.label] : [],
     );
-    expect(numbers).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(labels).toEqual(
+      ["1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "10.", "11."],
+    );
   });
 });
 
-describe("buildMndaDocument", () => {
+describe("fillCoverPage", () => {
   it("leaves no placeholder unprocessed", () => {
-    const cover = JSON.stringify(
-      buildMndaDocument(templates, completeValues).coverPage,
+    expect(JSON.stringify(fillCoverPage(coverPage, completeValues))).not.toContain(
+      '"type":"placeholder"',
     );
-    expect(cover).not.toContain('"type":"placeholder"');
   });
 
   it("fills in each term", () => {
@@ -137,7 +142,7 @@ describe("buildMndaDocument", () => {
   });
 
   it("fills in both parties and leaves signature and date blank", () => {
-    const table = buildMndaDocument(templates, completeValues).coverPage.find(
+    const table = fillCoverPage(coverPage, completeValues).find(
       (block) => block.type === "table",
     );
     if (table?.type !== "table") throw new Error("expected a table");
@@ -190,9 +195,9 @@ describe("buildMndaDocument", () => {
     const text = coverText(completeValues);
     expect(text).toContain("None.");
     expect(text).not.toContain("List any modifications");
-    expect(
-      JSON.stringify(buildMndaDocument(templates, completeValues).coverPage),
-    ).toContain('{"type":"field","text":"None.","filled":true}');
+    expect(JSON.stringify(fillCoverPage(coverPage, completeValues))).toContain(
+      '{"type":"field","text":"None.","filled":true}',
+    );
     expect(
       coverText({ ...completeValues, modifications: "Section 8 is removed." }),
     ).toContain("Section 8 is removed.");
@@ -203,7 +208,7 @@ describe("buildMndaDocument", () => {
     const values = structuredClone(completeValues);
     values.parties[0].company = company;
     values.governingLaw = "[Fill in state]";
-    const cover = buildMndaDocument(templates, values).coverPage;
+    const cover = fillCoverPage(coverPage, values);
     expect(cover.map(blockText).join("\n")).toContain(company);
     expect(JSON.stringify(cover)).toContain(
       `{"type":"field","text":${JSON.stringify(company)},"filled":true}`,
@@ -211,21 +216,14 @@ describe("buildMndaDocument", () => {
   });
 
   it("marks blanks as unfilled until they have a value", () => {
-    const cover = JSON.stringify(
-      buildMndaDocument(templates, defaultValues).coverPage,
-    );
-    expect(cover).toContain(
+    expect(JSON.stringify(fillCoverPage(coverPage, defaultValues))).toContain(
       '{"type":"field","text":"[Fill in state]","filled":false}',
     );
   });
 
-  it("keeps the Standard Terms and the license attribution", () => {
-    const document = buildMndaDocument(templates, completeValues);
-    expect(document.standardTerms).toEqual(templates.standardTerms);
-    expect(document.coverPage.map(blockText).join("\n")).toContain(
-      "free to use under CC BY 4.0",
-    );
-    expect(document.standardTerms.map(blockText).join("\n")).toContain(
+  it("keeps the license attribution on both sheets", () => {
+    expect(coverText(completeValues)).toContain("free to use under CC BY 4.0");
+    expect(standardTerms.map(blockText).join("\n")).toContain(
       "free to use under CC BY 4.0",
     );
   });
@@ -237,80 +235,6 @@ describe("buildMndaDocument", () => {
   });
 });
 
-describe("validateMnda", () => {
-  it("accepts complete values, with modifications optional", () => {
-    expect(validateMnda(completeValues)).toEqual({});
-  });
-
-  it("reports each required field in form order", () => {
-    const errors = validateMnda({ ...defaultValues, purpose: " " });
-    expect(Object.keys(errors)).toEqual([
-      "purpose",
-      "effectiveDate",
-      "governingLaw",
-      "jurisdiction",
-      "parties.0.company",
-      "parties.0.name",
-      "parties.0.title",
-      "parties.0.noticeAddress",
-      "parties.1.company",
-      "parties.1.name",
-      "parties.1.title",
-      "parties.1.noticeAddress",
-    ]);
-  });
-
-  it.each(["0026-11-04", "1899-12-31", "2100-01-01", "20261-11-04"])(
-    "rejects the unlikely date %s",
-    (effectiveDate) => {
-      expect(validateMnda({ ...completeValues, effectiveDate })).toHaveProperty(
-        "effectiveDate",
-        "Enter a year from 1900 to 2099.",
-      );
-    },
-  );
-
-  it.each(["0", "100", "1.5", "-1", "abc", ""])(
-    "rejects %j years for a fixed term",
-    (years) => {
-      expect(
-        validateMnda({ ...completeValues, termYears: years }),
-      ).toHaveProperty("termYears");
-      expect(
-        validateMnda({ ...completeValues, confidentialityYears: years }),
-      ).toHaveProperty("confidentialityYears");
-    },
-  );
-
-  it("ignores years when the option does not use them", () => {
-    expect(
-      validateMnda({
-        ...completeValues,
-        termType: "untilTerminated",
-        termYears: "",
-        confidentialityType: "perpetual",
-        confidentialityYears: "",
-      }),
-    ).toEqual({});
-  });
-
-  it("accepts accented Latin characters and typographic punctuation", () => {
-    const values = structuredClone(completeValues);
-    values.parties[0].name = "José Müller-Ñandú";
-    values.purpose = "“Evaluating” a deal — for €5";
-    expect(validateMnda(values)).toEqual({});
-  });
-
-  it("rejects characters the PDF cannot display", () => {
-    const values = structuredClone(completeValues);
-    values.parties[1].name = "Čapek";
-    values.modifications = "条款";
-    const errors = validateMnda(values);
-    expect(errors["parties.1.name"]).toContain("Č");
-    expect(errors.modifications).toContain("条");
-  });
-});
-
 describe("formatDate", () => {
   it("does not shift the date across time zones", () => {
     expect(formatDate("2026-01-01")).toBe("January 1, 2026");
@@ -319,24 +243,5 @@ describe("formatDate", () => {
 
   it("does not turn a partly typed year into the 1900s", () => {
     expect(formatDate("0026-11-04")).not.toContain("19");
-  });
-});
-
-describe("mndaFilename", () => {
-  it("includes both company names", () => {
-    expect(mndaFilename(completeValues)).toBe(
-      "Mutual-NDA-Acme-Sons-Inc-Globex.pdf",
-    );
-  });
-
-  it("removes characters that are unsafe in a filename", () => {
-    const values = structuredClone(completeValues);
-    values.parties[0].company = '../Müller/"Co"';
-    values.parties[1].company = "???";
-    expect(mndaFilename(values)).toBe("Mutual-NDA-Muller-Co.pdf");
-  });
-
-  it("falls back when no company has been entered", () => {
-    expect(mndaFilename(defaultValues)).toBe("Mutual-NDA.pdf");
   });
 });

@@ -1,0 +1,306 @@
+[
+  {
+    "id": "mutual-nda",
+    "name": "Mutual Non-Disclosure Agreement",
+    "shortName": "Mutual NDA",
+    "summary": "Both sides share confidential information, for example while exploring a deal, and agree to protect it.",
+    "coverFile": "Mutual-NDA-coverpage.md",
+    "termsFile": "Mutual-NDA.md",
+    "coverTitle": "Cover Page",
+    "roles": [
+      { "name": "Party 1", "description": "One of the two parties. The terms are mutual." },
+      { "name": "Party 2", "description": "The other party." }
+    ],
+    "fields": [
+      { "key": "purpose", "label": "Purpose", "description": "How Confidential Information may be used.", "type": "text", "required": true, "default": "Evaluating whether to enter into a business relationship with the other party." },
+      { "key": "effectiveDate", "label": "Effective Date", "description": "The date the agreement starts.", "type": "date", "required": true, "default": "today" },
+      { "key": "termType", "label": "MNDA Term", "description": "\"fixed\" if the agreement expires after a number of years, or \"untilTerminated\" if it continues until a party terminates it.", "type": "choice", "options": ["fixed", "untilTerminated"], "required": true, "default": "fixed" },
+      { "key": "termYears", "label": "MNDA Term years", "description": "The number of years for a fixed MNDA Term.", "type": "years", "required": true, "requiredWhen": { "key": "termType", "equals": "fixed" }, "default": "1" },
+      { "key": "confidentialityType", "label": "Term of Confidentiality", "description": "\"fixed\" if confidentiality lasts a number of years from the Effective Date, or \"perpetual\" if it lasts forever.", "type": "choice", "options": ["fixed", "perpetual"], "required": true, "default": "fixed" },
+      { "key": "confidentialityYears", "label": "Term of Confidentiality years", "description": "The number of years for a fixed Term of Confidentiality.", "type": "years", "required": true, "requiredWhen": { "key": "confidentialityType", "equals": "fixed" }, "default": "1" },
+      { "key": "governingLaw", "label": "Governing Law", "description": "The US state or other place whose law governs, such as Delaware.", "type": "text", "required": true },
+      { "key": "jurisdiction", "label": "Jurisdiction", "description": "The city or county and state for courts, such as New Castle, DE.", "type": "text", "required": true },
+      { "key": "modifications", "label": "MNDA Modifications", "description": "Any changes to the Standard Terms. Use an empty string only if the user asks to remove existing modifications.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "cloud-service-agreement",
+    "name": "Cloud Service Agreement",
+    "shortName": "Cloud Service Agreement",
+    "summary": "Standard terms for selling and buying cloud software or a SaaS product.",
+    "termsFile": "CSA.md",
+    "termsTitle": "Common Paper Cloud Service Agreement Standard Terms Version 3.0",
+    "coverTitle": "Order Form and Key Terms",
+    "roles": [
+      { "name": "Provider", "description": "The company supplying the Cloud Service." },
+      { "name": "Customer", "description": "The company buying and using the Cloud Service." }
+    ],
+    "fields": [
+      { "key": "cloudService", "section": "Order Form", "label": "Cloud Service", "description": "The product being sold.", "type": "text", "required": true },
+      { "key": "orderDate", "section": "Order Form", "label": "Order Date", "description": "The date this order starts.", "type": "date", "required": true },
+      { "key": "subscriptionPeriod", "section": "Order Form", "label": "Subscription Period", "description": "How long each subscription runs, such as 1 year. It renews automatically unless a party gives notice.", "type": "text", "required": true },
+      { "key": "nonRenewalNoticeDate", "section": "Order Form", "label": "Non-Renewal Notice Date", "description": "The deadline for giving notice of non-renewal, such as 30 days before the Subscription Period ends.", "type": "text", "required": true },
+      { "key": "fees", "section": "Order Form", "label": "Fees", "description": "The amounts Customer pays.", "type": "text", "required": true },
+      { "key": "technicalSupport", "section": "Order Form", "label": "Technical Support", "description": "The support Provider gives during the Subscription Period.", "type": "text", "required": false },
+      { "key": "effectiveDate", "section": "Key Terms", "label": "Effective Date", "description": "The date the Key Terms start.", "type": "date", "required": true, "default": "today" },
+      { "key": "governingLaw", "section": "Key Terms", "label": "Governing Law", "description": "The law that governs the agreement, such as Delaware.", "type": "text", "required": true },
+      { "key": "chosenCourts", "section": "Key Terms", "label": "Chosen Courts", "description": "The courts that hear disputes, such as the courts in New Castle, DE.", "type": "text", "required": true },
+      { "key": "generalCapAmount", "section": "Key Terms", "label": "General Cap Amount", "description": "The limit on each party's total liability, such as an amount or a multiple of Fees.", "type": "text", "required": true },
+      { "key": "providerCoveredClaims", "section": "Key Terms", "label": "Provider Covered Claims", "description": "The third-party claims Provider protects Customer against.", "type": "text", "required": false },
+      { "key": "customerCoveredClaims", "section": "Key Terms", "label": "Customer Covered Claims", "description": "The third-party claims Customer protects Provider against.", "type": "text", "required": false },
+      { "key": "dpa", "section": "Key Terms", "label": "DPA", "description": "The data processing agreement between the parties, if they have one.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "service-level-agreement",
+    "name": "Service Level Agreement",
+    "shortName": "Service Level Agreement",
+    "summary": "Uptime and support response commitments, and the remedies if they're missed. Used with a Cloud Service Agreement.",
+    "termsFile": "sla.md",
+    "termsTitle": "Common Paper Service Level Agreement Standard Terms Version 2.0",
+    "coverTitle": "Order Form",
+    "roles": [
+      { "name": "Provider", "description": "The company supplying the Cloud Service." },
+      { "name": "Customer", "description": "The company using the Cloud Service." }
+    ],
+    "fields": [
+      { "key": "parentAgreement", "label": "Agreement", "description": "The existing agreement this attaches to, usually a Cloud Service Agreement: its title and date.", "type": "text", "required": true },
+      { "key": "subscriptionPeriod", "label": "Subscription Period", "description": "The Subscription Period the commitments apply to.", "type": "text", "required": true },
+      { "key": "targetUptime", "label": "Target Uptime", "description": "The monthly availability Provider aims for, such as 99.9%. Uptime commitments apply only if this is set.", "type": "text", "required": false },
+      { "key": "uptimeCredit", "label": "Uptime Credit", "description": "The credit Customer can earn if availability falls below the Target Uptime.", "type": "text", "required": false },
+      { "key": "scheduledDowntime", "label": "Scheduled Downtime", "description": "Planned downtime that doesn't count against the Target Uptime.", "type": "text", "required": false },
+      { "key": "targetResponseTime", "label": "Target Response Time", "description": "How quickly Provider aims to respond to support requests. Response commitments apply only if this is set.", "type": "text", "required": false },
+      { "key": "responseTimeCredit", "label": "Response Time Credit", "description": "The credit Customer can earn if Provider misses the Target Response Time.", "type": "text", "required": false },
+      { "key": "supportChannel", "label": "Support Channel", "description": "Where Customer sends support requests, such as an email address.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "data-processing-agreement",
+    "name": "Data Processing Agreement",
+    "shortName": "Data Processing Agreement",
+    "summary": "How a provider processes a customer's personal data as a processor or subprocessor, including international transfers and security incidents. Supplements an existing agreement.",
+    "termsFile": "DPA.md",
+    "coverTitle": "Cover Page",
+    "roles": [
+      { "name": "Provider", "description": "The company processing personal data for Customer." },
+      { "name": "Customer", "description": "The company whose personal data is processed." }
+    ],
+    "fields": [
+      { "key": "parentAgreement", "label": "Agreement", "description": "The existing agreement this supplements: its title and date.", "type": "text", "required": true },
+      { "key": "natureAndPurpose", "label": "Nature and Purpose of Processing", "description": "What Provider does with the personal data and why.", "type": "text", "required": true },
+      { "key": "durationOfProcessing", "label": "Duration of Processing", "description": "How long the processing continues.", "type": "text", "required": true },
+      { "key": "frequencyOfTransfer", "label": "Frequency of Transfer", "description": "How often personal data is transferred, such as continuously.", "type": "text", "required": true },
+      { "key": "categoriesOfDataSubjects", "label": "Categories of Data Subjects", "description": "Whose personal data is processed, such as Customer's employees.", "type": "text", "required": true },
+      { "key": "categoriesOfPersonalData", "label": "Categories of Personal Data", "description": "The kinds of personal data processed, such as names and email addresses.", "type": "text", "required": true },
+      { "key": "specialCategoryData", "label": "Special Category Data", "description": "Any sensitive personal data processed, such as health data.", "type": "text", "required": false },
+      { "key": "specialCategorySafeguards", "label": "Special Category Data Restrictions or Safeguards", "description": "Any extra protections for Special Category Data.", "type": "text", "required": false },
+      { "key": "approvedSubprocessors", "label": "Approved Subprocessors", "description": "The subprocessors Customer approves, with each one's country and processing tasks.", "type": "text", "required": true },
+      { "key": "providerSecurityContact", "label": "Provider Security Contact", "description": "Where Customer sends security requests.", "type": "text", "required": true },
+      { "key": "securityPolicy", "label": "Security Policy", "description": "The security standards Provider is audited against.", "type": "text", "required": false },
+      { "key": "governingMemberState", "label": "Governing Member State", "description": "The EU member state whose law governs the EEA transfer clauses, for restricted transfers from the EEA.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "design-partner-agreement",
+    "name": "Design Partner Agreement",
+    "shortName": "Design Partner Agreement",
+    "summary": "Gives a partner early access to a product for internal business use in exchange for feedback.",
+    "termsFile": "design-partner-agreement.md",
+    "coverTitle": "Cover Page",
+    "roles": [
+      { "name": "Provider", "description": "The company offering early access to its product." },
+      { "name": "Partner", "description": "The company getting early access and giving feedback." }
+    ],
+    "fields": [
+      { "key": "product", "label": "Product", "description": "The product or services the partner gets early access to.", "type": "text", "required": true },
+      { "key": "program", "label": "Program", "description": "The design partner activities the partner takes part in, such as feedback sessions.", "type": "text", "required": false },
+      { "key": "effectiveDate", "label": "Effective Date", "description": "The date the agreement starts.", "type": "date", "required": true, "default": "today" },
+      { "key": "term", "label": "Term", "description": "How long the partner has access.", "type": "text", "required": true },
+      { "key": "fees", "label": "Fees", "description": "Any amounts Partner pays Provider.", "type": "text", "required": false },
+      { "key": "governingLaw", "label": "Governing Law", "description": "The law that governs the agreement, such as Delaware.", "type": "text", "required": true },
+      { "key": "chosenCourts", "label": "Chosen Courts", "description": "The courts that hear disputes, such as the courts in New Castle, DE.", "type": "text", "required": true }
+    ],
+    "excludedTerms": [
+      { "term": "Notice Address", "reason": "Collected as each party's notice address." }
+    ]
+  },
+  {
+    "id": "professional-services-agreement",
+    "name": "Professional Services Agreement",
+    "shortName": "Professional Services Agreement",
+    "summary": "Standard terms for professional services performed under a statement of work (SOW).",
+    "termsFile": "psa.md",
+    "coverTitle": "Key Terms and SOW",
+    "roles": [
+      { "name": "Provider", "description": "The company performing the services." },
+      { "name": "Customer", "description": "The company receiving the services." }
+    ],
+    "fields": [
+      { "key": "effectiveDate", "section": "Key Terms", "label": "Effective Date", "description": "The date the agreement starts.", "type": "date", "required": true, "default": "today" },
+      { "key": "governingLaw", "section": "Key Terms", "label": "Governing Law", "description": "The law that governs the agreement, such as Delaware.", "type": "text", "required": true },
+      { "key": "chosenCourts", "section": "Key Terms", "label": "Chosen Courts", "description": "The courts that hear disputes, such as the courts in New Castle, DE.", "type": "text", "required": true },
+      { "key": "generalCapAmount", "section": "Key Terms", "label": "General Cap Amount", "description": "The limit on each party's total liability, such as an amount or a multiple of Fees.", "type": "text", "required": true },
+      { "key": "increasedClaims", "section": "Key Terms", "label": "Increased Claims", "description": "Any claims subject to the higher Increased Cap Amount instead of the General Cap Amount.", "type": "text", "required": false },
+      { "key": "increasedCapAmount", "section": "Key Terms", "label": "Increased Cap Amount", "description": "The liability limit for Increased Claims.", "type": "text", "required": false },
+      { "key": "unlimitedClaims", "section": "Key Terms", "label": "Unlimited Claims", "description": "Any claims with no liability cap.", "type": "text", "required": false },
+      { "key": "providerCoveredClaims", "section": "Key Terms", "label": "Provider Covered Claims", "description": "The third-party claims Provider protects Customer against.", "type": "text", "required": false },
+      { "key": "customerCoveredClaims", "section": "Key Terms", "label": "Customer Covered Claims", "description": "The third-party claims Customer protects Provider against.", "type": "text", "required": false },
+      { "key": "additionalWarranties", "section": "Key Terms", "label": "Additional Warranties", "description": "Any promises beyond those in the Standard Terms.", "type": "text", "required": false },
+      { "key": "customerPolicies", "section": "Key Terms", "label": "Customer Policies", "description": "Any Customer policies Provider must follow.", "type": "text", "required": false },
+      { "key": "securityPolicy", "section": "Key Terms", "label": "Security Policy", "description": "The security policy that applies to the Services.", "type": "text", "required": false },
+      { "key": "dpa", "section": "Key Terms", "label": "DPA", "description": "The data processing agreement between the parties, if they have one.", "type": "text", "required": false },
+      { "key": "insuranceMinimums", "section": "Statement of Work (SOW)", "label": "Insurance Minimums", "description": "Any minimum insurance coverage each party must carry.", "type": "text", "required": false },
+      { "key": "services", "section": "Statement of Work (SOW)", "label": "Services", "description": "The work Provider will perform.", "type": "text", "required": true },
+      { "key": "deliverables", "section": "Statement of Work (SOW)", "label": "Deliverables", "description": "What Provider will hand over, if anything.", "type": "text", "required": false },
+      { "key": "sowTerm", "section": "Statement of Work (SOW)", "label": "SOW Term", "description": "When this SOW starts and ends.", "type": "text", "required": true },
+      { "key": "fees", "section": "Statement of Work (SOW)", "label": "Fees", "description": "The amounts Customer pays, and how invoices are sent.", "type": "text", "required": true },
+      { "key": "paymentPeriod", "section": "Statement of Work (SOW)", "label": "Payment Period", "description": "How long Customer has to pay each invoice, such as 30 days.", "type": "text", "required": true },
+      { "key": "timeOfAssignment", "section": "Statement of Work (SOW)", "label": "Time of Assignment", "description": "When rights in the Deliverables pass to Customer, such as on payment.", "type": "text", "required": false },
+      { "key": "rejectionPeriod", "section": "Statement of Work (SOW)", "label": "Rejection Period", "description": "How long Customer has to reject a Deliverable.", "type": "text", "required": false },
+      { "key": "resubmissionPeriod", "section": "Statement of Work (SOW)", "label": "Resubmission Period", "description": "How long Provider has to correct and resubmit a rejected Deliverable.", "type": "text", "required": false },
+      { "key": "customerObligations", "section": "Statement of Work (SOW)", "label": "Customer Obligations", "description": "Anything Customer must do for the Services to go ahead.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "partnership-agreement",
+    "name": "Partnership Agreement",
+    "shortName": "Partnership Agreement",
+    "summary": "Standard terms for a business partnership in which each party performs agreed obligations, including a trademark license.",
+    "termsFile": "Partnership-Agreement.md",
+    "termsTitle": "Common Paper Partnership Standard Terms Version 1.0",
+    "coverTitle": "Cover Page",
+    "roles": [
+      { "name": "Company", "description": "One partner, usually the company setting up the partnership." },
+      { "name": "Partner", "description": "The other partner." }
+    ],
+    "fields": [
+      { "key": "obligations", "section": "Business Terms", "label": "Obligations", "description": "What each party will do.", "type": "text", "required": true },
+      { "key": "territory", "section": "Business Terms", "label": "Territory", "description": "Where the trademark license applies.", "type": "text", "required": true },
+      { "key": "endDate", "section": "Business Terms", "label": "End Date", "description": "When the agreement ends.", "type": "text", "required": true },
+      { "key": "fees", "section": "Business Terms", "label": "Fees", "description": "Any amounts one party owes the other.", "type": "text", "required": false },
+      { "key": "paymentProcess", "section": "Business Terms", "label": "Payment Process", "description": "How Fees are billed or invoiced.", "type": "text", "required": false },
+      { "key": "paymentSchedule", "section": "Business Terms", "label": "Payment Schedule", "description": "When Fees are due.", "type": "text", "required": false },
+      { "key": "effectiveDate", "section": "Key Terms", "label": "Effective Date", "description": "The date the agreement starts.", "type": "date", "required": true, "default": "today" },
+      { "key": "governingLaw", "section": "Key Terms", "label": "Governing Law", "description": "The law that governs the agreement, such as Delaware.", "type": "text", "required": true },
+      { "key": "chosenCourts", "section": "Key Terms", "label": "Chosen Courts", "description": "The courts that hear disputes, such as the courts in New Castle, DE.", "type": "text", "required": true },
+      { "key": "generalCapAmount", "section": "Key Terms", "label": "General Cap Amount", "description": "The limit on each party's total liability, such as an amount or a multiple of Fees.", "type": "text", "required": true },
+      { "key": "increasedClaims", "section": "Key Terms", "label": "Increased Claims", "description": "Any claims subject to the higher Increased Cap Amount instead of the General Cap Amount.", "type": "text", "required": false },
+      { "key": "increasedCapAmount", "section": "Key Terms", "label": "Increased Cap Amount", "description": "The liability limit for Increased Claims.", "type": "text", "required": false },
+      { "key": "unlimitedClaims", "section": "Key Terms", "label": "Unlimited Claims", "description": "Any claims with no liability cap.", "type": "text", "required": false },
+      { "key": "companyCoveredClaims", "section": "Key Terms", "label": "Company Covered Claims", "description": "The third-party claims Company protects Partner against.", "type": "text", "required": false },
+      { "key": "partnerCoveredClaims", "section": "Key Terms", "label": "Partner Covered Claims", "description": "The third-party claims Partner protects Company against.", "type": "text", "required": false },
+      { "key": "additionalWarranties", "section": "Key Terms", "label": "Additional Warranties", "description": "Any promises beyond those in the Standard Terms.", "type": "text", "required": false },
+      { "key": "brandGuidelines", "section": "Key Terms", "label": "Brand Guidelines", "description": "Any rules for using each other's brand elements.", "type": "text", "required": false },
+      { "key": "dpa", "section": "Key Terms", "label": "DPA", "description": "The data processing agreement between the parties, if they have one.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "business-associate-agreement",
+    "name": "Business Associate Agreement",
+    "shortName": "Business Associate Agreement",
+    "summary": "How a business associate handles protected health information (PHI) for a healthcare-related company. Supplements an existing agreement.",
+    "termsFile": "BAA.md",
+    "termsTitle": "Common Paper BAA Standard Terms Version 1.0",
+    "coverTitle": "Cover Page",
+    "roles": [
+      { "name": "Provider", "description": "The business associate, which handles PHI." },
+      { "name": "Company", "description": "The company whose PHI is handled, on whose behalf Provider acts." }
+    ],
+    "fields": [
+      { "key": "parentAgreement", "label": "Agreement", "description": "The existing services agreement this supplements: its title and date.", "type": "text", "required": true },
+      { "key": "baaEffectiveDate", "label": "BAA Effective Date", "description": "The date this BAA starts.", "type": "date", "required": true, "default": "today" },
+      { "key": "breachNotificationPeriod", "label": "Breach Notification Period", "description": "How soon Provider must report a breach or an unpermitted use or disclosure of PHI.", "type": "text", "required": true },
+      { "key": "limitations", "label": "Limitations", "description": "Any limits on what Provider may do with PHI.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "software-license-agreement",
+    "name": "Software License Agreement",
+    "shortName": "Software License Agreement",
+    "summary": "Standard terms for licensing software that the customer installs and uses itself.",
+    "termsFile": "Software-License-Agreement.md",
+    "termsTitle": "Common Paper Software License Standard Terms Version 1.1",
+    "coverTitle": "Order Form and Key Terms",
+    "roles": [
+      { "name": "Provider", "description": "The company licensing the software." },
+      { "name": "Customer", "description": "The company installing and using the software." }
+    ],
+    "fields": [
+      { "key": "software", "section": "Order Form", "label": "Software", "description": "The product being licensed.", "type": "text", "required": true },
+      { "key": "orderDate", "section": "Order Form", "label": "Order Date", "description": "The date this order starts.", "type": "date", "required": true },
+      { "key": "subscriptionPeriod", "section": "Order Form", "label": "Subscription Period", "description": "How long each license period runs, such as 1 year. It renews automatically unless a party gives notice.", "type": "text", "required": true },
+      { "key": "nonRenewalNoticeDate", "section": "Order Form", "label": "Non-Renewal Notice Date", "description": "The deadline for giving notice of non-renewal, such as 30 days before the Subscription Period ends.", "type": "text", "required": true },
+      { "key": "permittedUses", "section": "Order Form", "label": "Permitted Uses", "description": "What Customer may use the Software for.", "type": "text", "required": true },
+      { "key": "licenseLimits", "section": "Order Form", "label": "License Limits", "description": "Any limits on use, such as a number of seats.", "type": "text", "required": false },
+      { "key": "fees", "section": "Order Form", "label": "Fees", "description": "The amounts Customer pays.", "type": "text", "required": true },
+      { "key": "paymentProcess", "section": "Order Form", "label": "Payment Process", "description": "How Customer pays, such as by invoice with 30-day terms.", "type": "text", "required": true },
+      { "key": "warrantyPeriod", "section": "Order Form", "label": "Warranty Period", "description": "How long Provider warrants that the Software conforms to its documentation.", "type": "text", "required": true },
+      { "key": "services", "section": "Order Form", "label": "Services", "description": "Any support and maintenance services.", "type": "text", "required": false },
+      { "key": "deletionProcedure", "section": "Order Form", "label": "Deletion Procedure", "description": "How Customer removes the Software when the agreement ends.", "type": "text", "required": false },
+      { "key": "effectiveDate", "section": "Key Terms", "label": "Effective Date", "description": "The date the Key Terms start.", "type": "date", "required": true, "default": "today" },
+      { "key": "governingLaw", "section": "Key Terms", "label": "Governing Law", "description": "The law that governs the agreement, such as Delaware.", "type": "text", "required": true },
+      { "key": "chosenCourts", "section": "Key Terms", "label": "Chosen Courts", "description": "The courts that hear disputes, such as the courts in New Castle, DE.", "type": "text", "required": true },
+      { "key": "generalCapAmount", "section": "Key Terms", "label": "General Cap Amount", "description": "The limit on each party's total liability, such as an amount or a multiple of Fees.", "type": "text", "required": true },
+      { "key": "increasedClaims", "section": "Key Terms", "label": "Increased Claims", "description": "Any claims subject to the higher Increased Cap Amount instead of the General Cap Amount.", "type": "text", "required": false },
+      { "key": "increasedCapAmount", "section": "Key Terms", "label": "Increased Cap Amount", "description": "The liability limit for Increased Claims.", "type": "text", "required": false },
+      { "key": "unlimitedClaims", "section": "Key Terms", "label": "Unlimited Claims", "description": "Any claims with no liability cap.", "type": "text", "required": false },
+      { "key": "providerCoveredClaims", "section": "Key Terms", "label": "Provider Covered Claims", "description": "The third-party claims Provider protects Customer against.", "type": "text", "required": false },
+      { "key": "customerCoveredClaims", "section": "Key Terms", "label": "Customer Covered Claims", "description": "The third-party claims Customer protects Provider against.", "type": "text", "required": false },
+      { "key": "additionalWarranties", "section": "Key Terms", "label": "Additional Warranties", "description": "Any promises beyond those in the Standard Terms.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  },
+  {
+    "id": "pilot-agreement",
+    "name": "Pilot Agreement",
+    "shortName": "Pilot Agreement",
+    "summary": "A short-term pilot, trial or evaluation that lets a prospective customer test a product before a longer commitment.",
+    "termsFile": "Pilot-Agreement.md",
+    "termsTitle": "Common Paper Pilot Agreement Standard Terms Version 1.1",
+    "coverTitle": "Order Form",
+    "roles": [
+      { "name": "Provider", "description": "The company offering the product for evaluation." },
+      { "name": "Customer", "description": "The prospective customer evaluating the product." }
+    ],
+    "fields": [
+      { "key": "product", "label": "Product", "description": "The product being evaluated.", "type": "text", "required": true },
+      { "key": "effectiveDate", "label": "Effective Date", "description": "The date the agreement starts.", "type": "date", "required": true, "default": "today" },
+      { "key": "pilotPeriod", "label": "Pilot Period", "description": "How long the pilot runs, such as 60 days.", "type": "text", "required": true },
+      { "key": "fees", "label": "Fees", "description": "Any amounts Customer pays for the pilot.", "type": "text", "required": false },
+      { "key": "governingLaw", "label": "Governing Law", "description": "The law that governs the agreement, such as Delaware.", "type": "text", "required": true },
+      { "key": "chosenCourts", "label": "Chosen Courts", "description": "The courts that hear disputes, such as the courts in New Castle, DE.", "type": "text", "required": true },
+      { "key": "generalCapAmount", "label": "General Cap Amount", "description": "The limit on each party's total liability, such as an amount.", "type": "text", "required": true }
+    ],
+    "excludedTerms": [
+      { "term": "Notice Address", "reason": "Collected as each party's notice address." }
+    ]
+  },
+  {
+    "id": "ai-addendum",
+    "name": "AI Addendum",
+    "shortName": "AI Addendum",
+    "summary": "Adds terms for AI services included in a product to an existing agreement, covering input, output and model training.",
+    "termsFile": "AI-Addendum.md",
+    "termsTitle": "Common Paper AI Addendum Standard Terms Version 1.0",
+    "coverTitle": "Cover Page",
+    "roles": [
+      { "name": "Provider", "description": "The company supplying the AI services." },
+      { "name": "Customer", "description": "The company using the AI services." }
+    ],
+    "fields": [
+      { "key": "parentAgreement", "label": "Agreement", "description": "The existing agreement this supplements: its title and date.", "type": "text", "required": true },
+      { "key": "trainingData", "label": "Training Data", "description": "Any data Provider may use to train models. Unless Training Data and Training Purposes are both identified, Provider may not use Customer's Inputs or Outputs to train any model.", "type": "text", "required": false },
+      { "key": "trainingPurposes", "label": "Training Purposes", "description": "What Provider may train models for, if training is allowed.", "type": "text", "required": false },
+      { "key": "trainingRestrictions", "label": "Training Restrictions", "description": "Any limits on training, if training is allowed.", "type": "text", "required": false },
+      { "key": "improvementRestrictions", "label": "Improvement Restrictions", "description": "Any limits on using Input, Output and Training Data to improve the AI system.", "type": "text", "required": false }
+    ],
+    "excludedTerms": []
+  }
+]

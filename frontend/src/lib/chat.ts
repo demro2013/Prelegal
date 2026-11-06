@@ -1,25 +1,29 @@
-import type { MndaErrors, MndaValues, Party } from "./mnda";
+import type { Values } from "./documents";
 
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-type Nullable<T> = { [Key in keyof T]?: T[Key] | null };
-
-/** Null or missing means "leave this field as it is". */
-export type MndaUpdates = Nullable<Omit<MndaValues, "parties">> & {
-  party1?: Nullable<Party> | null;
-  party2?: Nullable<Party> | null;
+export type FieldUpdate = {
+  key: string;
+  value: string;
 };
 
 export type ChatTurn = {
   reply: string;
-  updates: MndaUpdates;
+  documentType: string | null;
+  updates: FieldUpdate[];
 };
 
-export const GREETING =
-  "Hi! I’ll help you draft your Mutual NDA. Tell me about the agreement in your own words, or start here: which two companies are signing, and why will they share confidential information?";
+export const GREETING = `Hi! What type of document would you like to create? For example:
+- Mutual NDA
+- Cloud Service Agreement
+- Professional Services Agreement
+- Software License Agreement
+- Data Processing Agreement
+
+Or just tell me what you’re trying to do, and I’ll recommend the right one.`;
 
 /** Empty in production, where the backend serves the frontend. */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
@@ -29,7 +33,8 @@ const MAX_MESSAGES = 40;
 
 export async function sendChat(
   messages: ChatMessage[],
-  values: MndaValues,
+  documentType: string | null,
+  values: Values,
   today: string,
 ): Promise<ChatTurn> {
   const response = await fetch(`${API_BASE}/api/chat`, {
@@ -37,6 +42,7 @@ export async function sendChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       messages: messages.slice(-MAX_MESSAGES),
+      documentType,
       values,
       today,
     }),
@@ -47,51 +53,9 @@ export async function sendChat(
   return response.json();
 }
 
-function withoutNulls<T extends object>(updates: T | null | undefined) {
-  return Object.fromEntries(
-    Object.entries(updates ?? {}).filter(([, value]) => value != null),
-  ) as { [Key in keyof T]: NonNullable<T[Key]> };
-}
-
-export function applyUpdates(
-  values: MndaValues,
-  { party1, party2, ...fields }: MndaUpdates,
-): MndaValues {
-  const [first, second] = values.parties;
+export function applyUpdates(values: Values, updates: FieldUpdate[]): Values {
   return {
     ...values,
-    ...withoutNulls(fields),
-    parties: [
-      { ...first, ...withoutNulls(party1) },
-      { ...second, ...withoutNulls(party2) },
-    ],
+    ...Object.fromEntries(updates.map(({ key, value }) => [key, value])),
   };
-}
-
-const FIELD_LABELS: Record<string, string> = {
-  purpose: "Purpose",
-  effectiveDate: "Effective date",
-  termYears: "MNDA term",
-  confidentialityYears: "Term of confidentiality",
-  governingLaw: "Governing law",
-  jurisdiction: "Jurisdiction",
-  modifications: "Modifications",
-  company: "company",
-  name: "name",
-  title: "title",
-  noticeAddress: "notice address",
-};
-
-function fieldLabel(field: string): string {
-  const [, index, partyField] = field.match(/^parties\.(\d)\.(\w+)$/) ?? [];
-  return partyField
-    ? `Party ${Number(index) + 1} ${FIELD_LABELS[partyField]}`
-    : FIELD_LABELS[field];
-}
-
-/** There's no form to point at, so each message names its field. */
-export function describeErrors(errors: MndaErrors): string[] {
-  return Object.entries(errors).map(
-    ([field, message]) => `${fieldLabel(field)}: ${message}`,
-  );
 }

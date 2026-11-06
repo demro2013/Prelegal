@@ -1,7 +1,7 @@
-import { MndaCreator } from "@/components/MndaCreator";
-import { loadMndaTemplates } from "@/lib/loadTemplates";
+import { DocumentCreator } from "@/components/DocumentCreator";
+import { loadDocuments } from "@/lib/loadTemplates";
 
 export default async function Home() {
-  const templates = await loadMndaTemplates();
-  return <MndaCreator templates={templates} />;
+  const documents = await loadDocuments();
+  return <DocumentCreator documents={documents} />;
 }

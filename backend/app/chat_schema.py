@@ -4,11 +4,15 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.documents import DOCUMENTS, PARTY_KEYS, DocumentDefinition, FieldDefinition
+
 MAX_MESSAGES = 40
 # Longer than the browser's input limit, because assistant replies count too.
 MAX_MESSAGE_CHARS = 8000
 MAX_VALUE_CHARS = 5000
+MAX_VALUES = 100
 
+ValueKey = Annotated[str, Field(max_length=100)]
 ValueText = Annotated[str, Field(max_length=MAX_VALUE_CHARS)]
 
 
@@ -18,31 +22,10 @@ class ChatMessage(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
-class Party(BaseModel):
-    name: ValueText
-    title: ValueText
-    company: ValueText
-    noticeAddress: ValueText
-
-
-class MndaValues(BaseModel):
-    """Mirrors MndaValues in frontend/src/lib/mnda.ts."""
-
-    purpose: ValueText
-    effectiveDate: ValueText
-    termType: Literal["fixed", "untilTerminated"]
-    termYears: ValueText
-    confidentialityType: Literal["fixed", "perpetual"]
-    confidentialityYears: ValueText
-    governingLaw: ValueText
-    jurisdiction: ValueText
-    modifications: ValueText
-    parties: tuple[Party, Party]
-
-
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=MAX_MESSAGES)
-    values: MndaValues
+    documentType: str | None
+    values: dict[ValueKey, ValueText] = Field(max_length=MAX_VALUES)
     today: date
 
     @field_validator("messages")
@@ -52,35 +35,30 @@ class ChatRequest(BaseModel):
             raise ValueError("The last message must be from the user.")
         return messages
 
+    @field_validator("documentType")
+    @classmethod
+    def must_be_a_known_document(cls, document_type: str | None) -> str | None:
+        if document_type is not None and document_type not in DOCUMENTS:
+            raise ValueError("Unknown document type.")
+        return document_type
 
-class PartyUpdate(BaseModel):
-    name: str | None = None
-    title: str | None = None
-    company: str | None = None
-    noticeAddress: str | None = None
 
-
-class MndaUpdates(BaseModel):
-    """Null means "leave this field as it is"."""
-
-    purpose: str | None = None
-    effectiveDate: str | None = None
-    termType: Literal["fixed", "untilTerminated"] | None = None
-    termYears: str | None = None
-    confidentialityType: Literal["fixed", "perpetual"] | None = None
-    confidentialityYears: str | None = None
-    governingLaw: str | None = None
-    jurisdiction: str | None = None
-    modifications: str | None = None
-    party1: PartyUpdate | None = None
-    party2: PartyUpdate | None = None
+class FieldUpdate(BaseModel):
+    key: str
+    value: str | None = None
 
 
 class ChatTurn(BaseModel):
-    """The model's structured output, and the API's response."""
+    """The model's structured output, and the API's response.
+
+    A single fixed shape for every document, because a separate schema per
+    document would be less reliable with this model. The server checks each
+    update against the document's field definitions instead.
+    """
 
     reply: str
-    updates: MndaUpdates
+    documentType: str | None = None
+    updates: list[FieldUpdate] = []
 
     @field_validator("reply")
     @classmethod
@@ -97,61 +75,57 @@ class ChatTurn(BaseModel):
 _PRINTABLE_LOOKALIKES = str.maketrans({"‐": "-", "‑": "-", " ": " ", " ": " "})
 
 
-def _clean_modifications(value: str | None) -> str | None:
-    """Returns None for unusable text. Blank stays blank, which clears the field."""
-    if value is None:
-        return None
+def _clean_text(value: str) -> str | None:
+    """Returns None for unusable text. Blank stays blank."""
     value = value.translate(_PRINTABLE_LOOKALIKES).strip()
     # An over-limit value would make every later request invalid.
     return value if len(value) <= MAX_VALUE_CHARS else None
 
 
-def _clean_text(value: str | None) -> str | None:
-    return _clean_modifications(value) or None
-
-
-def _clean_years(value: str | None) -> str | None:
-    value = _clean_text(value)
-    return value if value and re.fullmatch(r"[1-9][0-9]?", value) else None
-
-
-def _clean_date(value: str | None) -> str | None:
-    value = _clean_text(value)
-    if not value or not re.fullmatch(r"(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}", value):
-        return None
+def _is_valid_date(value: str) -> bool:
+    if not re.fullmatch(r"(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}", value):
+        return False
     try:
         date.fromisoformat(value)
     except ValueError:
+        return False
+    return True
+
+
+def _clean_field_value(field: FieldDefinition, value: str) -> str | None:
+    cleaned = _clean_text(value)
+    if cleaned is None:
         return None
-    return value
-
-
-def _clean_party(party: PartyUpdate | None) -> PartyUpdate | None:
-    if party is None:
+    # Only an optional field can be cleared, so a model slip can't blank a required one.
+    if not cleaned:
+        return "" if not field.required else None
+    if field.type == "years" and not re.fullmatch(r"[1-9][0-9]?", cleaned):
         return None
-    return PartyUpdate(
-        name=_clean_text(party.name),
-        title=_clean_text(party.title),
-        company=_clean_text(party.company),
-        noticeAddress=_clean_text(party.noticeAddress),
-    )
+    if field.type == "date" and not _is_valid_date(cleaned):
+        return None
+    if field.type == "choice" and cleaned not in (field.options or []):
+        return None
+    return cleaned
 
 
-def clean_updates(updates: MndaUpdates) -> MndaUpdates:
-    """Drops values the agreement can't use, so a model slip can't damage it.
+def clean_updates(
+    updates: list[FieldUpdate], document: DocumentDefinition | None
+) -> list[FieldUpdate]:
+    """Drops values the agreement can't use, so a model slip can't damage it."""
+    if document is None:
+        return []
+    fields = {field.key: field for field in document.fields}
 
-    Only modifications can be cleared, because it's the one optional field.
-    """
-    return MndaUpdates(
-        purpose=_clean_text(updates.purpose),
-        effectiveDate=_clean_date(updates.effectiveDate),
-        termType=updates.termType,
-        termYears=_clean_years(updates.termYears),
-        confidentialityType=updates.confidentialityType,
-        confidentialityYears=_clean_years(updates.confidentialityYears),
-        governingLaw=_clean_text(updates.governingLaw),
-        jurisdiction=_clean_text(updates.jurisdiction),
-        modifications=_clean_modifications(updates.modifications),
-        party1=_clean_party(updates.party1),
-        party2=_clean_party(updates.party2),
-    )
+    cleaned = []
+    for update in updates:
+        if update.value is None:
+            continue
+        if update.key in fields:
+            value = _clean_field_value(fields[update.key], update.value)
+        elif update.key in PARTY_KEYS:
+            value = _clean_text(update.value) or None
+        else:
+            value = None
+        if value is not None:
+            cleaned.append(FieldUpdate(key=update.key, value=value))
+    return cleaned

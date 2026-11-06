@@ -5,11 +5,15 @@ AI assisted legal documentation generator for business scope applications.
 
 This project is in progress. Development is expected to take approximately 1 week.
 
-The template dataset is in place, and the Mutual NDA creator works through AI chat. The other templates aren't available in the app yet.
+The template dataset is in place, and all 11 document types can be created through AI chat. User accounts aren't available yet.
 
-## Mutual NDA Creator
+## Creating a Document
 
-Chat with the AI assistant about your agreement, watch the Mutual NDA fill in as you go, and download it as a PDF. Your messages and the agreement's details are sent through the backend to an AI provider (OpenRouter, using Cerebras) to produce each reply. Prelegal doesn't save them, and a page refresh starts over.
+Tell the AI assistant what you need. It recommends a document, or explains if it can't generate what you asked for and offers the closest match. It then guides you through the details, the agreement fills in as you go, and you download it as a PDF.
+
+Your messages and the agreement's details are sent through the backend to an AI provider (OpenRouter, using Cerebras) to produce each reply. Prelegal doesn't save them, and a page refresh starts over.
+
+The Mutual NDA uses its own Cover Page template. The other documents get a generated page that lists each deal value under the name the Standard Terms use for it, followed by the unmodified Standard Terms. `documents/documents.json` defines each document's fields. **Neither that page's wording nor the field descriptions have been legally reviewed.**
 
 ## Running Prelegal
 

@@ -1,18 +1,22 @@
-import type { MndaDocument } from "./mnda";
+import type { Agreement } from "./document";
+import type { DocumentDefinition } from "./documents";
 
 /**
  * Generates the PDF in the browser and saves it. The PDF library is large, so
  * it loads only when someone downloads.
  */
-export async function downloadMndaPdf(
-  agreement: MndaDocument,
+export async function downloadPdf(
+  agreement: Agreement,
+  definition: DocumentDefinition,
   filename: string,
 ): Promise<void> {
-  const [{ pdf }, { MndaPdf }] = await Promise.all([
+  const [{ pdf }, { DocumentPdf }] = await Promise.all([
     import("@react-pdf/renderer"),
-    import("@/components/MndaPdf"),
+    import("@/components/DocumentPdf"),
   ]);
-  const blob = await pdf(<MndaPdf document={agreement} />).toBlob();
+  const blob = await pdf(
+    <DocumentPdf agreement={agreement} definition={definition} />,
+  ).toBlob();
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

@@ -5,6 +5,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 COPY templates/ ../templates/
+COPY documents/ ../documents/
 RUN npm run build
 
 # Install the locked backend dependencies.
@@ -21,10 +22,12 @@ RUN useradd --create-home prelegal
 WORKDIR /app
 COPY --from=backend /app/.venv .venv
 COPY backend/app app
+COPY documents documents
 COPY --from=frontend /build/frontend/out static
 ENV PATH="/app/.venv/bin:$PATH" \
     PRELEGAL_DB_PATH=/tmp/prelegal.db \
     PRELEGAL_STATIC_DIR=/app/static \
+    PRELEGAL_DOCUMENTS_PATH=/app/documents/documents.json \
     PRELEGAL_CORS_ORIGINS=
 USER prelegal
 EXPOSE 8000

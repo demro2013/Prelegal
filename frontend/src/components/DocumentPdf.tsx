@@ -7,9 +7,16 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
-import { isSignatureRow, type Block, type Inline } from "@/lib/document";
-import type { MndaDocument } from "@/lib/mnda";
+import {
+  inlineText,
+  isSignatureRow,
+  type Agreement,
+  type Block,
+  type Inline,
+} from "@/lib/document";
+import type { DocumentDefinition } from "@/lib/documents";
 
+const KEEP_WHOLE_LENGTH = 1500;
 const LONG_WORD_LENGTH = 24;
 const MAX_CHUNK_LENGTH = 16;
 
@@ -51,7 +58,7 @@ const styles = StyleSheet.create({
   },
   paragraph: { marginBottom: 6 },
   row: { flexDirection: "row", marginBottom: 6 },
-  number: { width: 20 },
+  number: { minWidth: 20, marginRight: 4 },
   flexible: { flex: 1 },
   checkbox: {
     width: 9,
@@ -146,8 +153,13 @@ function PdfBlock({ block }: { block: Block }) {
       );
     case "numbered":
       return (
-        <View style={styles.row} wrap={false}>
-          <Text style={styles.number}>{block.number}.</Text>
+        // Short clauses stay whole so a number can't be left alone at the foot of
+        // a page. A long one has to split, because it can be taller than a page.
+        <View
+          style={[styles.row, { marginLeft: block.depth * 14 }]}
+          wrap={inlineText(block.content).length > KEEP_WHOLE_LENGTH}
+        >
+          <Text style={styles.number}>{block.label}</Text>
           <Text style={styles.flexible}>
             <PdfInline content={block.content} />
           </Text>
@@ -225,13 +237,23 @@ function PdfPage({ blocks, label }: { blocks: Block[]; label: string }) {
   );
 }
 
-export function MndaPdf({ document }: { document: MndaDocument }) {
+export function DocumentPdf({
+  agreement,
+  definition,
+}: {
+  agreement: Agreement;
+  definition: DocumentDefinition;
+}) {
+  const { name, shortName, coverTitle } = definition;
   return (
-    <Document title="Mutual Non-Disclosure Agreement" creator="Prelegal">
-      <PdfPage blocks={document.coverPage} label="Mutual NDA Cover Page" />
+    <Document title={name} creator="Prelegal">
       <PdfPage
-        blocks={document.standardTerms}
-        label="Mutual NDA Standard Terms"
+        blocks={agreement.coverPage}
+        label={`${shortName} ${coverTitle}`}
+      />
+      <PdfPage
+        blocks={agreement.standardTerms}
+        label={`${shortName} Standard Terms`}
       />
     </Document>
   );

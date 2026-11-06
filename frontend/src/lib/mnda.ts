@@ -1,4 +1,5 @@
 import { inlineText, type Block, type Inline } from "./document";
+import { isValidYears } from "./documents";
 
 export type Party = {
   name: string;
@@ -21,36 +22,6 @@ export type MndaValues = {
   parties: [Party, Party];
 };
 
-/** The parsed templates, or the agreement once the Cover Page is filled in. */
-export type MndaDocument = {
-  coverPage: Block[];
-  standardTerms: Block[];
-};
-
-/** Keyed by form field name, such as `purpose` or `parties.0.company`. */
-export type MndaErrors = Record<string, string>;
-
-const emptyParty: Party = {
-  name: "",
-  title: "",
-  company: "",
-  noticeAddress: "",
-};
-
-export const defaultValues: MndaValues = {
-  purpose:
-    "Evaluating whether to enter into a business relationship with the other party.",
-  effectiveDate: "",
-  termType: "fixed",
-  termYears: "1",
-  confidentialityType: "fixed",
-  confidentialityYears: "1",
-  governingLaw: "",
-  jurisdiction: "",
-  modifications: "",
-  parties: [emptyParty, emptyParty],
-};
-
 const COMPLETION_NOTICE =
   "Cover Page completed using Prelegal. The Standard Terms are unmodified.";
 
@@ -69,7 +40,7 @@ function formatYears(years: string): string {
   return Number(years) === 1 ? "1 year" : `${Number(years)} years`;
 }
 
-function field(value: string, blank: string): Inline {
+export function field(value: string, blank: string): Inline {
   return value.trim()
     ? { type: "field", text: value.trim(), filled: true }
     : { type: "field", text: blank, filled: false };
@@ -107,7 +78,7 @@ function fillPartyTable(
 }
 
 /**
- * Applies form values to the parsed Cover Page.
+ * Applies values to the parsed Cover Page.
  *
  * Unselected term options keep the template's wording, so the finished page
  * shows both choices with only the selected one checked.
@@ -199,94 +170,4 @@ export function fillCoverPage(
       content: [{ type: "text", text: COMPLETION_NOTICE }],
     },
   ];
-}
-
-export function buildMndaDocument(
-  templates: MndaDocument,
-  values: MndaValues,
-): MndaDocument {
-  return {
-    coverPage: fillCoverPage(templates.coverPage, values),
-    standardTerms: templates.standardTerms,
-  };
-}
-
-function isValidYears(years: string): boolean {
-  return /^[1-9]\d?$/.test(years.trim());
-}
-
-/**
- * The PDF uses the built-in Times fonts, which cover Windows-1252 only. Any
- * other character would print incorrectly, so it has to be caught up front.
- */
-const UNSUPPORTED_CHARACTER =
-  /[^\t\n\r\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/u;
-
-function checkText(value: string, label: string): string | undefined {
-  if (!value.trim()) return `Enter ${label}.`;
-  return checkCharacters(value);
-}
-
-function checkDate(isoDate: string): string | undefined {
-  if (!isoDate) return "Choose the effective date.";
-  return /^(19|20)\d{2}-\d{2}-\d{2}$/.test(isoDate)
-    ? undefined
-    : "Enter a year from 1900 to 2099.";
-}
-
-function checkCharacters(value: string): string | undefined {
-  const unsupported = value.match(UNSUPPORTED_CHARACTER);
-  return unsupported
-    ? `Remove “${unsupported[0]}”. The PDF can’t display this character.`
-    : undefined;
-}
-
-/** Returns one message per invalid field, in form order. */
-export function validateMnda(values: MndaValues): MndaErrors {
-  const checks: [string, string | undefined][] = [
-    ["purpose", checkText(values.purpose, "the purpose")],
-    ["effectiveDate", checkDate(values.effectiveDate)],
-    [
-      "termYears",
-      values.termType === "fixed" && !isValidYears(values.termYears)
-        ? "Enter a whole number of years from 1 to 99."
-        : undefined,
-    ],
-    [
-      "confidentialityYears",
-      values.confidentialityType === "fixed" &&
-      !isValidYears(values.confidentialityYears)
-        ? "Enter a whole number of years from 1 to 99."
-        : undefined,
-    ],
-    ["governingLaw", checkText(values.governingLaw, "the governing law")],
-    ["jurisdiction", checkText(values.jurisdiction, "the jurisdiction")],
-    ["modifications", checkCharacters(values.modifications)],
-    ...values.parties.flatMap((party, index): [string, string | undefined][] => [
-      [`parties.${index}.company`, checkText(party.company, "a company")],
-      [`parties.${index}.name`, checkText(party.name, "a name")],
-      [`parties.${index}.title`, checkText(party.title, "a title")],
-      [
-        `parties.${index}.noticeAddress`,
-        checkText(party.noticeAddress, "an email or postal address"),
-      ],
-    ]),
-  ];
-
-  return Object.fromEntries(
-    checks.filter((check): check is [string, string] => Boolean(check[1])),
-  );
-}
-
-function slug(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export function mndaFilename(values: MndaValues): string {
-  const companies = values.parties.map((party) => slug(party.company));
-  return ["Mutual-NDA", ...companies.filter(Boolean)].join("-") + ".pdf";
 }
