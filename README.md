@@ -11,13 +11,22 @@ The template dataset is in place, and a prototype of the Mutual NDA creator is a
 
 Fill in a form, see the Mutual NDA update as you type, and download it as a PDF. Everything runs in the browser, so what you enter isn't sent anywhere or saved.
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Running Prelegal
 
-Then open [http://localhost:3000](http://localhost:3000). See the [frontend README](frontend/README.md) for tests and other commands.
+You need Docker. Copy `.env.example` to `.env`, set `OPENROUTER_API_KEY`, and run the start script for your system:
+
+| System | Start | Stop |
+| --- | --- | --- |
+| Mac | `scripts/start-mac.sh` | `scripts/stop-mac.sh` |
+| Linux | `scripts/start-linux.sh` | `scripts/stop-linux.sh` |
+| Windows | `scripts/start-windows.ps1` | `scripts/stop-windows.ps1` |
+
+Then open [http://localhost:8000](http://localhost:8000). The FastAPI backend serves the frontend from a single container. Its SQLite database is created from scratch each time the container starts, so don't keep anything there that you need to retain.
+
+## Development
+
+- **Frontend:** see the [frontend README](frontend/README.md) for the dev server, tests and other commands.
+- **Backend:** with [uv](https://docs.astral.sh/uv/) installed, run the tests with `cd backend && uv run pytest`.
 
 ## Legal Templates
 
