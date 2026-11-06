@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // A static site: the app has no server, so entered details stay in the browser.
+  // A static site, which the FastAPI backend serves in production.
   output: "export",
   turbopack: {
     rules: {

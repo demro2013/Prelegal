@@ -1,29 +1,53 @@
 import { readFile } from "node:fs/promises";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
-async function fillRequiredFields(page: Page) {
-  await page.getByLabel("Governing law").fill("Delaware");
-  await page.getByLabel("Jurisdiction").fill("New Castle, DE");
+const ALL_REQUIRED_FIELDS = {
+  governingLaw: "Delaware",
+  jurisdiction: "New Castle, DE",
+  party1: {
+    company: "Acme Corp",
+    name: "Ada Stone",
+    title: "CEO",
+    noticeAddress: "ada@acme.example",
+  },
+  party2: {
+    company: "Globex",
+    name: "Sam Reed",
+    title: "COO",
+    noticeAddress: "sam@globex.example",
+  },
+};
 
-  const parties = [
-    ["Acme Corp", "Ada Stone", "CEO", "ada@acme.example"],
-    ["Globex", "Sam Reed", "COO", "sam@globex.example"],
-  ];
-  for (const [index, [company, name, title, address]] of parties.entries()) {
-    await page.locator(`[name="parties.${index}.company"]`).fill(company);
-    await page.locator(`[name="parties.${index}.name"]`).fill(name);
-    await page.locator(`[name="parties.${index}.title"]`).fill(title);
-    await page.locator(`[name="parties.${index}.noticeAddress"]`).fill(address);
-  }
+/** Answers each chat request with the next turn. The real backend has its own tests. */
+async function mockChat(page: Page, ...updatesPerTurn: object[]) {
+  const requests: Record<string, unknown>[] = [];
+  await page.route("**/api/chat", async (route: Route) => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({
+      json: {
+        reply: `Reply ${requests.length}`,
+        updates: updatesPerTurn[requests.length - 1] ?? {},
+      },
+    });
+  });
+  return requests;
 }
+
+async function say(page: Page, text: string) {
+  await page.getByLabel("Your message").fill(text);
+  await page.getByRole("button", { name: "Send" }).click();
+}
+
+const conversation = (page: Page) =>
+  page.getByRole("log", { name: "Conversation" });
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("shows the agreement with blanks before anything is entered", async ({
-  page,
-}) => {
+test("shows the greeting and the agreement with blanks", async ({ page }) => {
+  await expect(conversation(page)).toContainText("Mutual NDA");
+
   const preview = page.getByRole("region", { name: "Agreement preview" });
   await expect(
     preview.getByRole("heading", {
@@ -49,7 +73,11 @@ test("applies the stylesheet", async ({ page }) => {
 });
 
 test("fits a phone screen without horizontal scrolling", async ({ page }) => {
+  await mockChat(page);
   await page.setViewportSize({ width: 320, height: 700 });
+  await say(page, "Averyveryveryveryveryveryveryveryveryverylongcompanyname Inc");
+  await expect(conversation(page)).toContainText("Reply 1");
+
   const isClipped = await page.evaluate(() => {
     const table = document.querySelector("table")!;
     return (
@@ -61,34 +89,134 @@ test("fits a phone screen without horizontal scrolling", async ({ page }) => {
 });
 
 test("fills today's date in by default", async ({ page }) => {
-  await expect(page.getByLabel("Effective date")).not.toHaveValue("");
-});
-
-test("keeps a cleared date blank and blocks the download", async ({ page }) => {
-  const date = page.getByLabel("Effective date");
-  await date.fill("");
-  await expect(date).toHaveValue("");
-
   const cover = page.getByRole("article", { name: "Cover Page" });
-  await expect(cover).toContainText("[Today’s date]");
-
-  await page.getByRole("button", { name: "Download PDF" }).click();
-  await expect(page.getByText("Choose the effective date.")).toBeVisible();
-  await expect(date).toBeFocused();
+  await expect(cover).not.toContainText("[Today’s date]");
 });
 
-test("focuses invalid party fields in form order", async ({ page }) => {
-  await page.getByLabel("Governing law").fill("Delaware");
-  await page.getByLabel("Jurisdiction").fill("New Castle, DE");
+test("fills in the agreement from the assistant's replies", async ({ page }) => {
+  await mockChat(
+    page,
+    { governingLaw: "Delaware", termYears: "3" },
+    { termType: "untilTerminated", party2: { company: "Globex" } },
+  );
+  const cover = page.getByRole("article", { name: "Cover Page" });
 
-  await page.getByRole("button", { name: "Download PDF" }).click();
+  await say(page, "Delaware law, for 3 years");
+  await expect(conversation(page)).toContainText("Delaware law, for 3 years");
+  await expect(conversation(page)).toContainText("Reply 1");
+  await expect(cover).toContainText("Governing Law: Delaware");
+  await expect(cover).not.toContainText("[Fill in state]");
+  await expect(cover).toContainText("Expires 3 years from Effective Date.");
 
-  await expect(page.locator('[name="parties.0.company"]')).toBeFocused();
+  await say(page, "Actually until terminated, and the other side is Globex");
+  await expect(cover).toContainText("Expires [1 year(s)] from Effective Date.");
+  await expect(cover.getByRole("cell", { name: "Globex" })).toBeVisible();
+  // Details from the earlier turn stay in place.
+  await expect(cover).toContainText("Governing Law: Delaware");
 });
 
-test("locks the form while the PDF is being created", async ({ page }) => {
-  await fillRequiredFields(page);
-  // Slows the PDF library's download to hold the form in its generating state.
+test("sends the conversation and current values with each message", async ({
+  page,
+}) => {
+  const requests = await mockChat(page, { governingLaw: "Delaware" });
+
+  await say(page, "Delaware law");
+  await expect(conversation(page)).toContainText("Reply 1");
+  await say(page, "Next");
+  await expect(conversation(page)).toContainText("Reply 2");
+
+  expect(requests).toHaveLength(2);
+  const second = requests[1] as {
+    messages: { role: string; content: string }[];
+    values: { governingLaw: string; effectiveDate: string };
+    today: string;
+  };
+  expect(second.messages.map((message) => message.role)).toEqual([
+    "assistant",
+    "user",
+    "assistant",
+    "user",
+  ]);
+  expect(second.messages.at(-1)?.content).toBe("Next");
+  expect(second.values.governingLaw).toBe("Delaware");
+  expect(second.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(second.values.effectiveDate).toBe(second.today);
+});
+
+test("sends with Enter and adds a line with Shift+Enter", async ({ page }) => {
+  await mockChat(page);
+  const input = page.getByLabel("Your message");
+
+  await input.fill("First line");
+  await input.press("Shift+Enter");
+  await input.pressSequentially("Second line");
+  await expect(input).toHaveValue("First line\nSecond line");
+
+  await input.press("Enter");
+  await expect(conversation(page)).toContainText("Reply 1");
+  await expect(input).toHaveValue("");
+});
+
+test("doesn't send a blank message", async ({ page }) => {
+  const requests = await mockChat(page);
+  await say(page, "   ");
+  await expect(conversation(page).getByRole("paragraph")).toHaveCount(1);
+  expect(requests).toHaveLength(0);
+});
+
+test("offers a retry when the assistant fails, without repeating the message", async ({
+  page,
+}) => {
+  let attempts = 0;
+  await page.route("**/api/chat", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({ status: 502, json: { detail: "Unavailable" } });
+    } else {
+      await route.fulfill({ json: { reply: "Back again", updates: {} } });
+    }
+  });
+
+  await say(page, "Hello there");
+  await expect(conversation(page).getByRole("alert")).toContainText(
+    "couldn’t reply",
+  );
+
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(conversation(page)).toContainText("Back again");
+  await expect(conversation(page).getByRole("alert")).toBeHidden();
+  await expect(conversation(page).getByText("Hello there")).toHaveCount(1);
+});
+
+test("locks sending and the download while waiting for a reply", async ({
+  page,
+}) => {
+  let release = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/chat", async (route) => {
+    await released;
+    await route.fulfill({ json: { reply: "Done", updates: {} } });
+  });
+
+  await say(page, "Hello");
+  await expect(conversation(page)).toContainText("The assistant is replying…");
+  await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Download PDF" })).toBeDisabled();
+
+  release();
+  await expect(conversation(page)).toContainText("Done");
+  await expect(page.getByRole("button", { name: "Send" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Download PDF" })).toBeEnabled();
+});
+
+test("locks sending while the PDF is being created", async ({ page }) => {
+  await mockChat(page, ALL_REQUIRED_FIELDS);
+  await say(page, "Here are all the details");
+  await expect(conversation(page)).toContainText("Reply 1");
+
+  // Slows the PDF library's download to hold the page in its generating state.
   await page.route("**/_next/static/**", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     await route.continue();
@@ -98,31 +226,17 @@ test("locks the form while the PDF is being created", async ({ page }) => {
   await page.getByRole("button", { name: "Download PDF" }).click();
 
   await expect(page.getByRole("button", { name: "Creating PDF…" })).toBeDisabled();
-  await expect(page.getByLabel("Governing law")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
 
   await downloadPromise;
-  await expect(page.getByLabel("Governing law")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Send" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Download PDF" })).toBeEnabled();
 });
 
-test("updates the preview as the form changes", async ({ page }) => {
-  const cover = page.getByRole("article", { name: "Cover Page" });
-
-  await page.getByLabel("Governing law").fill("Delaware");
-  await expect(cover).toContainText("Governing Law: Delaware");
-  await expect(cover).not.toContainText("[Fill in state]");
-
-  await page.getByLabel("MNDA term: number of years").fill("3");
-  await expect(cover).toContainText("Expires 3 years from Effective Date.");
-
-  await page.getByRole("radio", { name: "Continues until terminated" }).check();
-  await expect(cover).toContainText("Expires [1 year(s)] from Effective Date.");
-
-  await page.locator('[name="parties.1.company"]').fill("Globex");
-  await expect(cover.getByRole("cell", { name: "Globex" })).toBeVisible();
-});
-
-test("blocks the download until required fields are valid", async ({ page }) => {
+test("lists what's missing until the required fields are valid", async ({
+  page,
+}) => {
+  await mockChat(page, { governingLaw: "Delaware" });
   let downloaded = false;
   page.on("download", () => {
     downloaded = true;
@@ -131,48 +245,47 @@ test("blocks the download until required fields are valid", async ({ page }) => 
   await page.getByRole("button", { name: "Download PDF" }).click();
 
   await expect(page.getByText("Fix 10 fields to download the PDF.")).toBeVisible();
-  await expect(page.getByLabel("Governing law")).toBeFocused();
-  await expect(page.getByText("Enter the governing law.")).toBeVisible();
-  await expect(page.getByLabel("Governing law")).toBeInViewport();
-  // Nothing, such as the sticky download bar, covers the focused field.
-  await expect
-    .poll(() =>
-      page.getByLabel("Governing law").evaluate((input) => {
-        const box = input.getBoundingClientRect();
-        return (
-          document.elementFromPoint(box.x + 20, box.y + box.height / 2) === input
-        );
-      }),
-    )
-    .toBe(true);
+  await expect(
+    page.getByText("Governing law: Enter the governing law."),
+  ).toBeVisible();
+  await expect(page.getByText("Party 2 company: Enter a company.")).toBeAttached();
 
-  await page.getByLabel("Governing law").fill("Delaware");
+  await say(page, "Delaware law");
   await expect(page.getByText("Fix 9 fields to download the PDF.")).toBeVisible();
-  await expect(page.getByText("Enter the governing law.")).toBeHidden();
+  await expect(
+    page.getByText("Governing law: Enter the governing law."),
+  ).toBeHidden();
   expect(downloaded).toBe(false);
 });
 
 test("rejects characters the PDF can't display", async ({ page }) => {
-  await fillRequiredFields(page);
-  await page.locator('[name="parties.0.name"]').fill("Čapek");
+  await mockChat(page, {
+    ...ALL_REQUIRED_FIELDS,
+    party1: { ...ALL_REQUIRED_FIELDS.party1, name: "Čapek" },
+  });
+  await say(page, "Here are all the details");
+  await expect(conversation(page)).toContainText("Reply 1");
 
   await page.getByRole("button", { name: "Download PDF" }).click();
 
-  await expect(page.getByText("Remove “Č”.")).toBeVisible();
-  await expect(page.locator('[name="parties.0.name"]')).toBeFocused();
+  await expect(page.getByText("Party 1 name: Remove “Č”.")).toBeVisible();
 });
 
-test("downloads the completed agreement without sending what was entered", async ({
+test("downloads the completed agreement, sending details only to the chat API", async ({
   page,
 }) => {
-  const requests: string[] = [];
+  await mockChat(page, ALL_REQUIRED_FIELDS);
+  const requests: { url: string; hasDetails: boolean }[] = [];
   page.on("request", (request) => {
-    requests.push(
-      `${request.method()} ${request.url()} ${request.postData() ?? ""}`,
-    );
+    requests.push({
+      url: request.url(),
+      hasDetails: /Acme|Ada Stone|Delaware/.test(request.postData() ?? ""),
+    });
   });
 
-  await fillRequiredFields(page);
+  await say(page, "Acme Corp and Globex, Delaware law");
+  await expect(conversation(page)).toContainText("Reply 1");
+
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download PDF" }).click();
   const download = await downloadPromise;
@@ -185,9 +298,8 @@ test("downloads the completed agreement without sending what was entered", async
   ).toBeVisible();
 
   const origin = new URL(page.url()).origin;
-  for (const request of requests) {
-    expect(request).not.toMatch(/Acme|Ada Stone|Delaware/);
-    const url = request.split(" ")[1];
+  for (const { url, hasDetails } of requests) {
     if (!url.startsWith("blob:")) expect(url.startsWith(origin)).toBe(true);
+    if (!url.endsWith("/api/chat")) expect(hasDetails).toBe(false);
   }
 });
