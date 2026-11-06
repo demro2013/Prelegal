@@ -13,9 +13,9 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Create a Mutual NDA | Prelegal",
+  title: "Create a Legal Agreement | Prelegal",
   description:
-    "Fill in a Mutual NDA, preview it as you type, and download it as a PDF.",
+    "Chat with an AI assistant to draft a standard legal agreement, preview it as it fills in, and download it as a PDF.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

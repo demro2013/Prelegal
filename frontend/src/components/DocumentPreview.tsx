@@ -1,5 +1,10 @@
-import { isSignatureRow, type Block, type Inline } from "@/lib/document";
-import type { MndaDocument } from "@/lib/mnda";
+import {
+  isSignatureRow,
+  type Agreement,
+  type Block,
+  type Inline,
+} from "@/lib/document";
+import type { DocumentDefinition } from "@/lib/documents";
 
 function PreviewInline({ content }: { content: Inline[] }) {
   return content.map((inline, index) => {
@@ -125,8 +130,11 @@ function PreviewBlock({ block }: { block: Block }) {
       );
     case "numbered":
       return (
-        <div className="mb-3 flex gap-2">
-          <span className="w-6 shrink-0 tabular-nums">{block.number}.</span>
+        <div
+          className="mb-3 flex gap-2"
+          style={{ marginLeft: `${block.depth * 1.25}rem` }}
+        >
+          <span className="min-w-6 shrink-0 tabular-nums">{block.label}</span>
           <p className="min-w-0">
             <PreviewInline content={block.content} />
           </p>
@@ -165,11 +173,40 @@ function Sheet({ blocks, label }: { blocks: Block[]; label: string }) {
   );
 }
 
-export function DocumentPreview({ document }: { document: MndaDocument }) {
+export function DocumentPreview({
+  agreement,
+  definition,
+}: {
+  agreement: Agreement;
+  definition: DocumentDefinition;
+}) {
   return (
     <div className="flex flex-col gap-6">
-      <Sheet blocks={document.coverPage} label="Cover Page" />
-      <Sheet blocks={document.standardTerms} label="Standard Terms" />
+      <Sheet blocks={agreement.coverPage} label={definition.coverTitle} />
+      <Sheet blocks={agreement.standardTerms} label="Standard Terms" />
+    </div>
+  );
+}
+
+/** Shown until a document is chosen, so people can see what's available. */
+export function DocumentList({
+  documents,
+}: {
+  documents: DocumentDefinition[];
+}) {
+  return (
+    <div className="bg-paper text-text mx-auto w-full max-w-[46rem] p-6 sm:p-12">
+      <h2 className="font-serif text-[1.75rem] leading-tight font-semibold">
+        Documents I can draft
+      </h2>
+      <ul className="mt-5 flex flex-col gap-4">
+        {documents.map(({ id, name, summary }) => (
+          <li key={id}>
+            <p className="font-semibold">{name}</p>
+            <p className="text-muted">{summary}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

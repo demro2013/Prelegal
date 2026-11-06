@@ -1,8 +1,8 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { describe, expect, it } from "vitest";
-import { loadMndaTemplates } from "@/lib/loadTemplates";
-import { buildMndaDocument, defaultValues } from "@/lib/mnda";
-import { MndaPdf, splitLongWord } from "./MndaPdf";
+import { buildAgreement } from "@/lib/agreement";
+import { loadAgreementTemplates, loadDocuments } from "@/lib/loadTemplates";
+import { DocumentPdf, splitLongWord } from "./DocumentPdf";
 
 describe("splitLongWord", () => {
   it("leaves ordinary words whole", () => {
@@ -25,34 +25,62 @@ describe("splitLongWord", () => {
   });
 });
 
-describe("MndaPdf", () => {
-  it("renders the completed agreement as a PDF", async () => {
-    const templates = await loadMndaTemplates();
-    const document = buildMndaDocument(templates, {
-      ...defaultValues,
-      effectiveDate: "2026-11-04",
-      governingLaw: "Delaware",
-      jurisdiction: "New Castle, DE",
-      modifications: "Line one\nLine two",
-      parties: [
-        {
-          name: "José Müller",
-          title: "CEO",
-          company: "Acme & Sons | **Inc**",
-          noticeAddress: "1 Main St\nDover, DE",
-        },
-        {
-          name: "Sam Reed",
-          title: "COO",
-          company: "Globex",
-          noticeAddress: "sam@globex.example",
-        },
-      ],
-    });
+describe("DocumentPdf", () => {
+  it("renders the Mutual NDA with awkward values", async () => {
+    const documents = await loadDocuments();
+    const definition = documents.find(({ id }) => id === "mutual-nda")!;
+    const agreement = buildAgreement(
+      definition,
+      await loadAgreementTemplates(definition),
+      {
+        effectiveDate: "2026-11-04",
+        termType: "fixed",
+        termYears: "1",
+        confidentialityType: "fixed",
+        confidentialityYears: "1",
+        purpose: "Evaluating a deal",
+        governingLaw: "Delaware",
+        jurisdiction: "New Castle, DE",
+        modifications: "Line one\nLine two",
+        "party1.name": "José Müller",
+        "party1.title": "CEO",
+        "party1.company": "Acme & Sons | **Inc**",
+        "party1.noticeAddress": "1 Main St\nDover, DE",
+        "party2.name": "Sam Reed",
+        "party2.title": "COO",
+        "party2.company": "Globex",
+        "party2.noticeAddress": "sam@globex.example",
+      },
+    );
 
-    const buffer = await renderToBuffer(<MndaPdf document={document} />);
+    const buffer = await renderToBuffer(
+      <DocumentPdf agreement={agreement} definition={definition} />,
+    );
 
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
     expect(buffer.length).toBeGreaterThan(5000);
   }, 30_000);
+
+  it("renders every document, including those with long clauses", async () => {
+    const documents = await loadDocuments();
+    expect(documents).toHaveLength(11);
+
+    for (const definition of documents) {
+      const values = Object.fromEntries(
+        definition.fields.map(({ key, type }) => [
+          key,
+          type === "date" ? "2026-11-04" : type === "years" ? "2" : "A value",
+        ]),
+      );
+      const agreement = buildAgreement(
+        definition,
+        await loadAgreementTemplates(definition),
+        values,
+      );
+      const buffer = await renderToBuffer(
+        <DocumentPdf agreement={agreement} definition={definition} />,
+      );
+      expect(buffer.subarray(0, 5).toString("latin1"), definition.id).toBe("%PDF-");
+    }
+  }, 120_000);
 });
