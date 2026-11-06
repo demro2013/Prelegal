@@ -9,6 +9,8 @@ STATIC_DIR = Path(os.environ.get("PRELEGAL_STATIC_DIR", REPO_ROOT / "frontend" /
 DOCUMENTS_PATH = Path(
     os.environ.get("PRELEGAL_DOCUMENTS_PATH", REPO_ROOT / "documents" / "documents.json")
 )
+# Secure by default. docker-compose.yml turns this off for local plain HTTP.
+COOKIE_SECURE = os.environ.get("PRELEGAL_COOKIE_SECURE", "true").lower() != "false"
 # The Next.js dev server is another origin. In Docker, the backend serves the frontend.
 CORS_ORIGINS = [
     origin

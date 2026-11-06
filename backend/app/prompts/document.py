@@ -8,6 +8,7 @@ from app.documents import (
     DocumentDefinition,
     is_required,
     missing_required,
+    with_defaults,
 )
 
 _ROLE = """\
@@ -47,7 +48,9 @@ accept or change them.
 - For optional fields, offer them briefly and accept "skip". They'll print as "Not \
 specified". Explain what a term means if the user asks.
 - Keep names and other details exactly as the user gives them.
-- Unless nothing is still needed, end every reply with your next question.
+- The list of what's still needed doesn't count this message. Work out what's left \
+after your updates, and unless nothing is, end every reply with a direct question \
+asking for the next item. Never just acknowledge, and never say "let me know".
 - When nothing is still needed, summarize briefly, mention any optional fields left \
 open, and tell the user they can review the agreement and select Download PDF.
 - If this document supplements another agreement and the user doesn't have one yet, \
@@ -121,12 +124,13 @@ def build_system_prompt(
         sections += [_CHOOSING, _CONDUCT]
         return "\n\n".join(sections)
 
+    filled = with_defaults(document, values, today)
     relevant = {field.key for field in document.fields} | PARTY_KEYS
-    current = {key: value for key, value in values.items() if key in relevant}
-    missing = missing_required(document, values)
+    current = {key: value for key, value in filled.items() if key in relevant}
+    missing = missing_required(document, filled)
     sections += [
         f"The document is the {document.name} ({document.id}). {document.summary}",
-        f"Fields you can fill in through updates:\n{_describe_fields(document, values)}",
+        f"Fields you can fill in through updates:\n{_describe_fields(document, filled)}",
         f"Current values, as JSON:\n{json.dumps(current, indent=2)}",
         f"Still needed: {', '.join(missing) if missing else 'nothing'}.",
         _FILLING,

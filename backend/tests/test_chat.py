@@ -1,14 +1,17 @@
 import logging
 import os
+from contextlib import closing
 from datetime import date
 from types import SimpleNamespace
 
 import litellm
 import pytest
+from fastapi import Response
 from fastapi.testclient import TestClient
 
-from app import llm
+from app import auth, llm
 from app.chat_schema import ChatTurn, FieldUpdate
+from app.db import connect
 from app.documents import DOCUMENTS
 from app.main import create_app
 from app.prompts.document import build_system_prompt
@@ -30,10 +33,28 @@ def llm_response(content):
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
+def sign_in(client, db_path, email="ada@acme.example"):
+    """Creates a user and session directly, because password hashing is deliberately slow."""
+    with closing(connect(db_path)) as db:
+        cursor = db.execute(
+            "INSERT INTO users (email, password_hash) VALUES (?, 'x')", (email,)
+        )
+        db.commit()
+        auth.start_session(db, response := Response(), cursor.lastrowid)
+    token = response.headers["set-cookie"].split(";")[0].split("=", 1)[1]
+    client.cookies.set(auth.COOKIE_NAME, token)
+
+
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def db_path(tmp_path):
+    return tmp_path / "test.db"
+
+
+@pytest.fixture
+def client(db_path, tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    with TestClient(create_app(tmp_path / "test.db", tmp_path / "absent")) as client:
+    with TestClient(create_app(db_path, tmp_path / "absent")) as client:
+        sign_in(client, db_path)
         yield client
 
 
@@ -60,6 +81,99 @@ def stub_updates(monkeypatch, *pairs):
 def returned(client, **overrides):
     data = client.post("/api/chat", json=body(**overrides)).json()
     return {update["key"]: update["value"] for update in data["updates"]}
+
+
+def test_requires_login_without_calling_the_model(client, monkeypatch):
+    calls = stub_updates(monkeypatch)
+    client.cookies.clear()
+
+    assert client.post("/api/chat", json=body()).status_code == 401
+    assert calls == []
+
+
+def test_chat_is_limited_per_user(client, db_path, monkeypatch):
+    calls = stub_updates(monkeypatch)
+    for _ in range(auth.CHAT_MESSAGES):
+        assert client.post("/api/chat", json=body()).status_code == 200
+
+    blocked = client.post("/api/chat", json=body())
+    assert blocked.status_code == 429
+    assert int(blocked.headers["retry-after"]) > 0
+    assert len(calls) == auth.CHAT_MESSAGES
+
+    # Another account isn't affected.
+    other = TestClient(client.app)
+    sign_in(other, db_path, email="sam@globex.example")
+    assert other.post("/api/chat", json=body()).status_code == 200
+
+
+def test_adds_the_next_question_based_on_this_turns_updates(client, monkeypatch):
+    stub_turns(
+        monkeypatch,
+        ChatTurn(
+            reply="Got it, 60 days.",
+            updates=updates(
+                ("pilotPeriod", "60 days"),
+                ("product", "App"),
+                ("governingLaw", "Delaware"),
+                ("chosenCourts", "New Castle"),
+                *(
+                    (f"party{number}.{field}", "x")
+                    for number in (1, 2)
+                    for field in ("company", "name", "title", "noticeAddress")
+                ),
+            ),
+        ),
+    )
+
+    reply = client.post("/api/chat", json=body(values={})).json()["reply"]
+
+    assert reply.startswith("Got it, 60 days.")
+    # Everything else was just provided, or has a default.
+    assert "General Cap Amount" in reply
+    assert "Effective Date" not in reply
+
+
+def test_says_what_to_do_once_this_turn_completes_the_document(client, monkeypatch):
+    values = {
+        "product": "App",
+        "pilotPeriod": "60 days",
+        "governingLaw": "Delaware",
+        "chosenCourts": "New Castle",
+        **{
+            f"party{number}.{field}": "x"
+            for number in (1, 2)
+            for field in ("company", "name", "title", "noticeAddress")
+        },
+    }
+    stub_turns(
+        monkeypatch,
+        ChatTurn(reply="Got it.", updates=updates(("generalCapAmount", "$10,000"))),
+    )
+
+    reply = client.post("/api/chat", json=body(values=values)).json()["reply"]
+
+    assert "Download PDF" in reply
+
+
+def test_a_newly_chosen_document_asks_for_its_first_details(client, monkeypatch):
+    stub_turns(
+        monkeypatch,
+        ChatTurn(reply="Sure", documentType="ai-addendum"),
+        ChatTurn(reply="An AI Addendum covers AI services."),
+    )
+
+    reply = client.post("/api/chat", json=body(documentType=None, values={})).json()["reply"]
+
+    assert "for the Provider" in reply
+
+
+def test_keeps_asking_when_no_document_is_chosen(client, monkeypatch):
+    stub_turns(monkeypatch, ChatTurn(reply="I can't generate a will."))
+
+    reply = client.post("/api/chat", json=body(documentType=None, values={})).json()["reply"]
+
+    assert reply.endswith("What type of document would you like to create?")
 
 
 def test_returns_the_reply_document_and_updates(client, monkeypatch):
@@ -103,7 +217,7 @@ def test_choosing_a_document_asks_again_with_its_fields(client, monkeypatch):
     calls = stub_turns(
         monkeypatch,
         ChatTurn(reply="Sure", documentType="service-level-agreement"),
-        ChatTurn(reply="Let's start.", updates=updates(("targetUptime", "99.9%"))),
+        ChatTurn(reply="Let's start. Who is the Provider?", updates=updates(("targetUptime", "99.9%"))),
     )
 
     data = client.post(
@@ -112,7 +226,7 @@ def test_choosing_a_document_asks_again_with_its_fields(client, monkeypatch):
     ).json()
 
     assert data == {
-        "reply": "Let's start.",
+        "reply": "Let's start. Who is the Provider?",
         "documentType": "service-level-agreement",
         "updates": [{"key": "targetUptime", "value": "99.9%"}],
     }
@@ -279,7 +393,7 @@ def test_retries_once_after_an_unreadable_answer(client, monkeypatch, bad):
     response = client.post("/api/chat", json=body())
 
     assert response.status_code == 200
-    assert response.json()["reply"] == "Hello"
+    assert response.json()["reply"].startswith("Hello")
     assert answers == []
 
 
