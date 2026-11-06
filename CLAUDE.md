@@ -60,4 +60,6 @@ After you finish each Jira task and the task has been marked for completion, upd
 
 ## KAN-6
 
+**Status:** Complete
+
 Built the technical foundation for V1 with no product feature changes. `backend/` is a uv FastAPI project with a `create_app` factory, `GET /api/health`, and the static frontend mounted last at `/`. Each startup deletes and recreates the SQLite database with an empty `users` table (stdlib `sqlite3`); sign up and sign in endpoints and UI aren't built yet. A multi-stage `Dockerfile` builds the frontend and runs as a non-root user, and `docker-compose.yml` passes `.env` at runtime with a healthcheck. `scripts/` has start and stop scripts for Mac, Linux and Windows. Backend tests run with `cd backend && uv run pytest`.
