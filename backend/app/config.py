@@ -3,6 +3,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The defaults suit a local checkout. The Docker image sets both variables.
+# The defaults suit a local checkout. The Docker image sets all of these.
 DB_PATH = Path(os.environ.get("PRELEGAL_DB_PATH", REPO_ROOT / "backend" / "prelegal.db"))
 STATIC_DIR = Path(os.environ.get("PRELEGAL_STATIC_DIR", REPO_ROOT / "frontend" / "out"))
+# The Next.js dev server is another origin. In Docker, the backend serves the frontend.
+CORS_ORIGINS = [
+    origin
+    for origin in os.environ.get("PRELEGAL_CORS_ORIGINS", "http://localhost:3000").split(",")
+    if origin
+]

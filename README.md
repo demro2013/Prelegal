@@ -5,11 +5,11 @@ AI assisted legal documentation generator for business scope applications.
 
 This project is in progress. Development is expected to take approximately 1 week.
 
-The template dataset is in place, and a prototype of the Mutual NDA creator is available in [`frontend/`](frontend/README.md). The other templates aren't available in the app yet.
+The template dataset is in place, and the Mutual NDA creator works through AI chat. The other templates aren't available in the app yet.
 
 ## Mutual NDA Creator
 
-Fill in a form, see the Mutual NDA update as you type, and download it as a PDF. Everything runs in the browser, so what you enter isn't sent anywhere or saved.
+Chat with the AI assistant about your agreement, watch the Mutual NDA fill in as you go, and download it as a PDF. Your messages and the agreement's details are sent through the backend to an AI provider (OpenRouter, using Cerebras) to produce each reply. Prelegal doesn't save them, and a page refresh starts over.
 
 ## Running Prelegal
 
@@ -26,7 +26,15 @@ Then open [http://localhost:8000](http://localhost:8000). The FastAPI backend se
 ## Development
 
 - **Frontend:** see the [frontend README](frontend/README.md) for the dev server, tests and other commands.
-- **Backend:** with [uv](https://docs.astral.sh/uv/) installed, run the tests with `cd backend && uv run pytest`.
+- **Backend:** with [uv](https://docs.astral.sh/uv/) installed, run these from `backend/`:
+
+| Command | What it does |
+| --- | --- |
+| `uv run pytest` | Runs the tests, without calling the real model |
+| `uv run --env-file ../.env pytest -m live` | Tests the real model, which costs a little credit |
+| `uv run --env-file ../.env uvicorn app.main:app --port 8000` | Starts the backend on its own |
+
+The chat endpoint has no sign in or rate limit yet, so anyone who can reach the app can spend your OpenRouter credit. Don't expose it publicly.
 
 ## Legal Templates
 

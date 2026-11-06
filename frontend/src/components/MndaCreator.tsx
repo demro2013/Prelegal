@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { ChatPane } from "./ChatPane";
 import { DocumentPreview } from "./DocumentPreview";
-import { MndaForm } from "./MndaForm";
+import {
+  applyUpdates,
+  describeErrors,
+  GREETING,
+  sendChat,
+  type ChatMessage,
+} from "@/lib/chat";
 import { downloadMndaPdf } from "@/lib/downloadMndaPdf";
 import {
   buildMndaDocument,
@@ -11,7 +18,6 @@ import {
   validateMnda,
   type MndaDocument,
   type MndaValues,
-  type Party,
 } from "@/lib/mnda";
 
 type Status =
@@ -33,15 +39,20 @@ export function MndaCreator({ templates }: { templates: MndaDocument }) {
   // The page is prerendered, so today's date is only known in the browser.
   const today = useSyncExternalStore(subscribeToNothing, todayIso, () => "");
   const [edits, setEdits] = useState<MndaValues>(defaultValues);
-  // Null until someone changes the date. After that, blank stays blank.
-  const [editedDate, setEditedDate] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { role: "assistant", content: GREETING },
+  ]);
+  const [chatStatus, setChatStatus] = useState<"idle" | "pending" | "failed">(
+    "idle",
+  );
   const [showErrors, setShowErrors] = useState(false);
   const [status, setStatus] = useState<Status>({ type: "idle" });
   const isGenerating = status.type === "generating";
+  const isPending = chatStatus === "pending";
 
   const values = useMemo(
-    () => ({ ...edits, effectiveDate: editedDate ?? today }),
-    [edits, editedDate, today],
+    () => ({ ...edits, effectiveDate: edits.effectiveDate || today }),
+    [edits, today],
   );
   const document = useMemo(
     () => buildMndaDocument(templates, values),
@@ -51,30 +62,31 @@ export function MndaCreator({ templates }: { templates: MndaDocument }) {
     () => (showErrors ? validateMnda(values) : {}),
     [showErrors, values],
   );
-  const errorCount = Object.keys(errors).length;
+  const errorDescriptions = describeErrors(errors);
 
-  function handleChange(patch: Partial<MndaValues>) {
-    if (patch.effectiveDate !== undefined) setEditedDate(patch.effectiveDate);
-    setEdits((current) => ({ ...current, ...patch }));
-    setStatus({ type: "idle" });
+  async function requestReply(history: ChatMessage[]) {
+    setChatStatus("pending");
+    try {
+      const turn = await sendChat(history, values, today);
+      setMessages([...history, { role: "assistant", content: turn.reply }]);
+      setEdits((current) => applyUpdates(current, turn.updates));
+      setStatus({ type: "idle" });
+      setChatStatus("idle");
+    } catch (error) {
+      console.error(error);
+      setChatStatus("failed");
+    }
   }
 
-  function handlePartyChange(index: number, patch: Partial<Party>) {
-    setEdits((current) => {
-      const parties: MndaValues["parties"] = [...current.parties];
-      parties[index] = { ...parties[index], ...patch };
-      return { ...current, parties };
-    });
-    setStatus({ type: "idle" });
+  function handleSend(text: string) {
+    const history: ChatMessage[] = [...messages, { role: "user", content: text }];
+    setMessages(history);
+    void requestReply(history);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const [firstInvalid] = Object.keys(validateMnda(values));
-    if (firstInvalid) {
+  async function handleDownload() {
+    if (Object.keys(validateMnda(values)).length > 0) {
       setShowErrors(true);
-      const element = event.currentTarget.elements.namedItem(firstInvalid);
-      if (element instanceof HTMLElement) element.focus();
       return;
     }
 
@@ -91,67 +103,69 @@ export function MndaCreator({ templates }: { templates: MndaDocument }) {
 
   return (
     <main className="bg-pane text-text lg:grid lg:h-dvh lg:grid-cols-[minmax(24rem,29rem)_1fr]">
-      <form
-        noValidate
-        onSubmit={handleSubmit}
-        className="flex flex-col lg:h-dvh lg:overflow-y-auto"
-      >
-        <div className="flex flex-1 flex-col gap-6 p-6 sm:p-8">
-          <header>
-            <h1 className="font-serif text-[2.5rem] leading-[1.05] font-semibold text-balance">
-              Create a Mutual NDA
-            </h1>
-            <p className="text-muted mt-3">
-              Your agreement updates as you type. What you enter stays in this
-              browser and isn’t saved.
-            </p>
-          </header>
-          {/* Locked while generating, so the PDF always matches the form. */}
-          <fieldset disabled={isGenerating} className="contents">
-            <MndaForm
-              values={values}
-              errors={errors}
-              onChange={handleChange}
-              onPartyChange={handlePartyChange}
-            />
-          </fieldset>
-          <p className="text-muted border-text/15 border-t pt-5 text-sm">
-            Based on the{" "}
-            <a
-              href="https://commonpaper.com/standards/mutual-nda/1.0/"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2"
-            >
-              Common Paper Mutual NDA
-            </a>
-            , used under{" "}
-            <a
-              href="https://creativecommons.org/licenses/by/4.0/"
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-2"
-            >
-              CC BY 4.0
-            </a>
-            . Prelegal doesn’t provide legal advice.
+      <div className="flex flex-col lg:h-dvh lg:overflow-y-auto">
+        <header className="p-6 pb-4 sm:px-8 sm:pt-8">
+          <h1 className="font-serif text-[2.5rem] leading-[1.05] font-semibold text-balance">
+            Create a Mutual NDA
+          </h1>
+          <p className="text-muted mt-3">
+            Chat with the assistant and your agreement fills in as you go. Your
+            messages are sent to an AI provider to do this, and Prelegal doesn’t
+            save them.
           </p>
-        </div>
+        </header>
+        <ChatPane
+          messages={messages}
+          isPending={isPending}
+          hasFailed={chatStatus === "failed"}
+          isLocked={isPending || isGenerating}
+          onSend={handleSend}
+          onRetry={() => void requestReply(messages)}
+        />
+        <p className="text-muted px-6 pb-4 text-sm sm:px-8">
+          Based on the{" "}
+          <a
+            href="https://commonpaper.com/standards/mutual-nda/1.0/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            Common Paper Mutual NDA
+          </a>
+          , used under{" "}
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            CC BY 4.0
+          </a>
+          . Prelegal doesn’t provide legal advice.
+        </p>
         <div className="bg-pane border-text/15 sticky bottom-0 border-t px-6 py-4 sm:px-8">
           <button
-            type="submit"
-            disabled={isGenerating}
+            type="button"
+            onClick={handleDownload}
+            disabled={isGenerating || isPending}
             className="bg-ink hover:bg-ink-dark w-full cursor-pointer px-4 py-3 font-semibold text-white transition-colors disabled:cursor-wait disabled:opacity-70"
           >
             {isGenerating ? "Creating PDF…" : "Download PDF"}
           </button>
           <div aria-live="polite" className="text-sm empty:hidden">
-            {errorCount > 0 && (
-              <p className="text-error mt-2 font-medium">
-                {errorCount === 1
-                  ? "Fix 1 field to download the PDF."
-                  : `Fix ${errorCount} fields to download the PDF.`}
-              </p>
+            {errorDescriptions.length > 0 && (
+              <div className="text-error mt-2">
+                <p className="font-medium">
+                  {errorDescriptions.length === 1
+                    ? "Fix 1 field to download the PDF. Tell the assistant:"
+                    : `Fix ${errorDescriptions.length} fields to download the PDF. Tell the assistant:`}
+                </p>
+                <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-5">
+                  {errorDescriptions.map((description) => (
+                    <li key={description}>{description}</li>
+                  ))}
+                </ul>
+              </div>
             )}
             {status.type === "downloaded" && (
               <p className="mt-2 break-words">Downloaded {status.filename}</p>
@@ -163,14 +177,14 @@ export function MndaCreator({ templates }: { templates: MndaDocument }) {
             )}
           </div>
         </div>
-      </form>
+      </div>
       <section
         aria-label="Agreement preview"
         tabIndex={0}
         className="bg-desk p-4 sm:p-8 lg:h-dvh lg:overflow-y-auto"
       >
         <p className="text-desk-text mx-auto mb-4 max-w-[46rem] text-sm">
-          Blue shows what you’ve entered and yellow shows what’s still blank.
+          Blue shows what’s been filled in and yellow shows what’s still blank.
           Neither color appears in the PDF.
         </p>
         <DocumentPreview document={document} />

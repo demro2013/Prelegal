@@ -14,5 +14,7 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
+    // A value in .env.local would otherwise send chat requests to another origin.
+    env: { NEXT_PUBLIC_API_BASE: "" },
   },
 });
