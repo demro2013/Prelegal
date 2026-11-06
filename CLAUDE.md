@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation creates all 11 document types through AI chat, served by the FastAPI backend from a Docker container. The catalog has 12 files because the Mutual NDA's cover page and terms form one document. User authentication and document persistence aren't built yet.
+The current implementation creates all 11 document types through AI chat, served by the FastAPI backend from a Docker container. The catalog has 12 files because the Mutual NDA's cover page and terms form one document. Users sign up and log in, and accounts are wiped whenever the container restarts. Saved documents aren't built yet.
 
 ## Development process
 
@@ -48,11 +48,13 @@ scripts/stop-windows.ps1
 Backend available at http://localhost:8000
 
 ## Color Scheme
-- Accent Yellow: `#ecad0a`
-- Blue Primary: `#209dd7`
-- Purple Secondary: `#753991` (submit buttons)
-- Dark Navy: `#032147` (headings)
-- Gray Text: `#888888`
+The "Redline" palette, defined in `frontend/src/app/globals.css`. The agreement sheet and PDF stay neutral.
+- Shell Indigo: `#15125c` (app shell and headings)
+- Highlighter Yellow: `#f6ff4d` (blanks to fill and the next action, always with dark text)
+- Blue Ink: `#2420b8` (filled-in values and links on paper)
+- Bond: `#e9eaf4` (behind the agreement)
+- Redline Red: `#c2182c` (errors on paper; `#ffb9c1` on indigo)
+- Muted Text: `#55567a` (on paper; `#c3c2ee` on indigo)
 
 ## Post Activity  
 
@@ -76,3 +78,9 @@ Replaced the Mutual NDA form with a freeform AI chat beside the live preview. `P
 **Status:** Complete
 
 Expanded the chat to all 11 document types. `documents/documents.json` is the single source for each document's fields, roles and titles, and `backend/tests/test_documents.py` fails if a template's linked term is neither listed nor deliberately excluded. `POST /api/chat` now takes and returns a `documentType`, flat `values` and a list of key/value `updates`, a fixed shape for every document that the server checks by field type. When the model chooses a document, the route calls it a second time with that document's fields, so details already given are captured. Only the parties carry over when switching. `prompts/document.py` builds the prompt, including how to handle unsupported requests. In the frontend, `lib/agreement.ts` builds the agreement: the Mutual NDA keeps its Cover Page template, and the others get a generated page of values under the template's own terms, with empty optional fields printed as "Not specified". The parser renders every span class and rebuilds nested numbering such as 5.2 and (a), because the terms cite sections by number. Each document's parsed templates are a static `/templates/<id>.json` fetched once it's chosen.
+
+## KAN-9
+
+**Status:** Complete
+
+Added real accounts and redesigned the app. `backend/app/auth.py` hashes passwords with stdlib scrypt, stores only a hash of each session token in the new `sessions` table, and sets an HttpOnly, SameSite=Lax cookie that is Secure unless `PRELEGAL_COOKIE_SECURE=false` (set in `docker-compose.yml` for local HTTP). `routes/auth.py` has signup, login, logout and me, and `/api/chat` now requires a session. In-memory limits cover failed logins per email, signups per client and chat messages per user. `backend/app/next_question.py` guarantees the conversation moves forward: after applying each turn's updates, the server works out what's still missing and adds the next question itself if the reply doesn't ask one, because the model alone left 72% of turns without a question. In the frontend, `AuthScreen` serves `/login/` and `/signup/`, `DocumentCreator` redirects to login without a session, and `lib/api.ts` sends every request with credentials. The "Redline" redesign replaces the earlier colour scheme, with Big Shoulders headlines and Schibsted Grotesk text.
