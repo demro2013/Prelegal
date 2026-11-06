@@ -1,17 +1,23 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-ink: #1b3fa8;
-  --color-ink-dark: #142f80;
-  --color-flag: #ffdc4a;
-  --color-desk: #23473b;
-  --color-desk-text: #dce8e2;
-  --color-pane: #eef2ef;
+  /* Ballpoint signature ink, for the app's shell. */
+  --color-shell: #15125c;
+  --color-shell-line: #3f3ba3;
+  --color-shell-text: #f4f4ff;
+  --color-shell-muted: #c3c2ee;
+  /* The highlighter that marks a contract's blanks and the next thing to do. */
+  --color-highlighter: #f6ff4d;
+  /* Filled-in values, like ink on the page. */
+  --color-ink: #2420b8;
+  --color-bond: #e9eaf4;
   --color-paper: #ffffff;
-  --color-text: #15231d;
-  --color-muted: #4e5e56;
-  --color-error: #a3211a;
-  --font-sans: var(--font-instrument-sans);
+  --color-text: #15163a;
+  --color-muted: #55567a;
+  --color-error: #c2182c;
+  --color-error-soft: #ffb9c1;
+  --font-display: var(--font-big-shoulders);
+  --font-sans: var(--font-schibsted);
   --font-serif: var(--font-source-serif);
 }
 
@@ -22,7 +28,7 @@
   }
 
   body {
-    background: var(--color-pane);
+    background: var(--color-shell);
     color: var(--color-text);
     font-family: var(--font-sans);
   }
@@ -32,8 +38,11 @@
     outline-offset: 2px;
   }
 
+  .on-shell :focus-visible {
+    outline-color: var(--color-highlighter);
+  }
+
   section:focus-visible {
-    outline-color: var(--color-flag);
     outline-offset: -3px;
   }
 }
@@ -42,10 +51,10 @@
   .field-input {
     display: block;
     width: 100%;
-    margin-top: 0.375rem;
     padding: 0.5rem 0.625rem;
     background: var(--color-paper);
-    border: 1px solid color-mix(in srgb, var(--color-text) 45%, transparent);
+    color: var(--color-text);
+    border: 1px solid var(--color-shell);
     border-radius: 2px;
   }
 
@@ -53,12 +62,43 @@
   .sign-flag {
     display: inline-block;
     padding: 0.125rem 1.125rem 0.125rem 0.5rem;
-    background: var(--color-flag);
+    background: var(--color-highlighter);
     color: var(--color-text);
     font-family: var(--font-sans);
     font-size: 0.8125rem;
     font-weight: 600;
     line-height: 1.25;
     clip-path: polygon(0 0, 100% 0, calc(100% - 0.625rem) 50%, 100% 100%, 0 100%);
+  }
+
+  /* Your replies are flags too: each one is something you've put on the page. */
+  .reply-flag {
+    padding: 0.5rem 1.625rem 0.5rem 0.75rem;
+    background: var(--color-paper);
+    color: var(--color-shell);
+    clip-path: polygon(0 0, 100% 0, calc(100% - 0.75rem) 50%, 100% 100%, 0 100%);
+  }
+
+  /* A blank in the login page's clause, which wipes in once. */
+  .redact {
+    display: inline-block;
+    height: 0.74em;
+    margin-inline: 0.04em;
+    /* Wipes the background rather than a transform, which could stay unpainted after a redirect. */
+    background: linear-gradient(var(--color-highlighter), var(--color-highlighter)) left / 100% 100% no-repeat;
+    vertical-align: -0.02em;
+    animation: redact 420ms cubic-bezier(0.7, 0, 0.2, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .redact {
+      animation: none;
+    }
+  }
+}
+
+@keyframes redact {
+  from {
+    background-size: 0 100%;
   }
 }

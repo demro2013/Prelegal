@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ChatPane } from "./ChatPane";
 import { DocumentList, DocumentPreview } from "./DocumentPreview";
 import { buildAgreement } from "@/lib/agreement";
+import { ApiError } from "@/lib/api";
+import { fetchAccount, logOut } from "@/lib/auth";
 import { applyUpdates, GREETING, sendChat, type ChatMessage } from "@/lib/chat";
 import type { AgreementTemplates } from "@/lib/document";
 import {
@@ -29,6 +32,10 @@ type Selection = {
   templates: AgreementTemplates;
 };
 
+const REPLY_FAILED = "The assistant couldn’t reply.";
+const TOO_MANY_MESSAGES =
+  "That’s a lot of messages in a short time. Wait a minute, then try again.";
+
 function todayIso() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -43,20 +50,27 @@ export function DocumentCreator({
 }: {
   documents: DocumentDefinition[];
 }) {
+  const router = useRouter();
   // The page is prerendered, so today's date is only known in the browser.
   const today = useSyncExternalStore(subscribeToNothing, todayIso, () => "");
+  const [email, setEmail] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [edits, setEdits] = useState<Values>({});
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: GREETING },
   ]);
-  const [chatStatus, setChatStatus] = useState<"idle" | "pending" | "failed">(
-    "idle",
-  );
+  const [isPending, setIsPending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [status, setStatus] = useState<Status>({ type: "idle" });
   const isGenerating = status.type === "generating";
-  const isPending = chatStatus === "pending";
+
+  useEffect(() => {
+    fetchAccount().then(
+      (account) => setEmail(account.email),
+      () => router.replace("/login/"),
+    );
+  }, [router]);
 
   const definition = selection?.definition;
   const values = useMemo(
@@ -69,16 +83,15 @@ export function DocumentCreator({
       buildAgreement(selection.definition, selection.templates, values),
     [selection, values],
   );
-  const errorMessages = useMemo(
-    () =>
-      definition && showErrors
-        ? Object.values(validateDocument(definition, values))
-        : [],
-    [definition, showErrors, values],
+  const errors = useMemo(
+    () => (definition ? Object.values(validateDocument(definition, values)) : []),
+    [definition, values],
   );
+  const isReady = Boolean(agreement) && errors.length === 0;
 
   async function requestReply(history: ChatMessage[]) {
-    setChatStatus("pending");
+    setIsPending(true);
+    setChatError(null);
     try {
       const turn = await sendChat(history, definition?.id ?? null, values, today);
       const next = documents.find(({ id }) => id === turn.documentType);
@@ -94,10 +107,19 @@ export function DocumentCreator({
       }
       setMessages([...history, { role: "assistant", content: turn.reply }]);
       setStatus({ type: "idle" });
-      setChatStatus("idle");
     } catch (error) {
       console.error(error);
-      setChatStatus("failed");
+      if (error instanceof ApiError && error.status === 401) {
+        router.replace("/login/");
+        return;
+      }
+      setChatError(
+        error instanceof ApiError && error.status === 429
+          ? TOO_MANY_MESSAGES
+          : REPLY_FAILED,
+      );
+    } finally {
+      setIsPending(false);
     }
   }
 
@@ -109,7 +131,7 @@ export function DocumentCreator({
 
   async function handleDownload() {
     if (!definition || !agreement) return;
-    if (Object.keys(validateDocument(definition, values)).length > 0) {
+    if (!isReady) {
       setShowErrors(true);
       return;
     }
@@ -125,28 +147,47 @@ export function DocumentCreator({
     }
   }
 
+  async function handleLogOut() {
+    await logOut().catch(console.error);
+    router.replace("/login/");
+  }
+
+  if (!email) return <div className="bg-shell min-h-dvh" />;
+
   return (
-    <main className="bg-pane text-text lg:grid lg:h-dvh lg:grid-cols-[minmax(24rem,29rem)_1fr]">
-      <div className="flex flex-col lg:h-dvh lg:overflow-y-auto">
-        <header className="p-6 pb-4 sm:px-8 sm:pt-8">
-          <h1 className="font-serif text-[2.5rem] leading-[1.05] font-semibold text-balance">
+    <main className="bg-bond text-text lg:grid lg:h-dvh lg:grid-cols-[minmax(24rem,29rem)_1fr]">
+      <div className="on-shell bg-shell text-shell-text flex flex-col lg:h-dvh lg:overflow-y-auto">
+        <div className="flex items-baseline justify-between gap-4 px-6 pt-5 sm:px-8">
+          <p className="font-display text-2xl font-extrabold">Prelegal</p>
+          <div className="flex min-w-0 items-baseline gap-3 text-sm">
+            <span className="text-shell-muted truncate">{email}</span>
+            <button
+              type="button"
+              onClick={handleLogOut}
+              className="shrink-0 cursor-pointer underline underline-offset-2"
+            >
+              Log out
+            </button>
+          </div>
+        </div>
+        <header className="px-6 pt-6 pb-5 sm:px-8">
+          <h1 className="font-display text-[3.25rem] leading-[0.95] font-extrabold text-balance">
             {definition ? definition.name : "Create a legal agreement"}
           </h1>
-          <p className="text-muted mt-3">
-            Chat with the assistant and your agreement fills in as you go. Your
-            messages are sent to an AI provider to do this, and Prelegal doesn’t
-            save them.
+          <p className="text-shell-muted mt-3 text-sm">
+            Your messages go to an AI provider to fill in the agreement.
+            Prelegal doesn’t save them.
           </p>
         </header>
         <ChatPane
           messages={messages}
           isPending={isPending}
-          hasFailed={chatStatus === "failed"}
+          error={chatError}
           isLocked={isPending || isGenerating}
           onSend={handleSend}
           onRetry={() => void requestReply(messages)}
         />
-        <p className="text-muted px-6 pb-4 text-sm sm:px-8">
+        <p className="text-shell-muted px-6 pb-4 text-sm sm:px-8">
           Based on{" "}
           <a
             href="https://commonpaper.com/standards/"
@@ -167,25 +208,40 @@ export function DocumentCreator({
           </a>
           . Prelegal doesn’t provide legal advice.
         </p>
-        <div className="bg-pane border-text/15 sticky bottom-0 border-t px-6 py-4 sm:px-8">
+        <div className="bg-shell border-shell-line sticky bottom-0 border-t px-6 py-4 sm:px-8 lg:static">
+          <div aria-live="polite">
+            {agreement && (
+              <p className="mb-2 text-sm font-semibold">
+                {isReady
+                  ? "Ready to download"
+                  : errors.length === 1
+                    ? "1 detail still needed"
+                    : `${errors.length} details still needed`}
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleDownload}
             disabled={!agreement || isGenerating || isPending}
-            className="bg-ink hover:bg-ink-dark w-full cursor-pointer px-4 py-3 font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+            className={`w-full cursor-pointer border px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+              isReady
+                ? "bg-highlighter border-highlighter text-shell"
+                : "border-shell-muted text-shell-text"
+            }`}
           >
             {isGenerating ? "Creating PDF…" : "Download PDF"}
           </button>
           <div aria-live="polite" className="text-sm empty:hidden">
-            {errorMessages.length > 0 && (
-              <div className="text-error mt-2">
+            {showErrors && errors.length > 0 && (
+              <div className="text-error-soft mt-2">
                 <p className="font-medium">
-                  {errorMessages.length === 1
+                  {errors.length === 1
                     ? "Fix 1 field to download the PDF. Tell the assistant:"
-                    : `Fix ${errorMessages.length} fields to download the PDF. Tell the assistant:`}
+                    : `Fix ${errors.length} fields to download the PDF. Tell the assistant:`}
                 </p>
                 <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-5">
-                  {errorMessages.map((message) => (
+                  {errors.map((message) => (
                     <li key={message}>{message}</li>
                   ))}
                 </ul>
@@ -195,7 +251,7 @@ export function DocumentCreator({
               <p className="mt-2 break-words">Downloaded {status.filename}</p>
             )}
             {status.type === "failed" && (
-              <p className="text-error mt-2 font-medium">
+              <p className="text-error-soft mt-2 font-medium">
                 The PDF couldn’t be created. Try downloading it again.
               </p>
             )}
@@ -205,11 +261,11 @@ export function DocumentCreator({
       <section
         aria-label={agreement ? "Agreement preview" : "Available documents"}
         tabIndex={0}
-        className="bg-desk p-4 sm:p-8 lg:h-dvh lg:overflow-y-auto"
+        className="bg-bond p-4 sm:p-8 lg:h-dvh lg:overflow-y-auto"
       >
         {agreement && definition ? (
           <>
-            <p className="text-desk-text mx-auto mb-4 max-w-[46rem] text-sm">
+            <p className="text-muted mx-auto mb-4 max-w-[46rem] text-sm">
               Blue shows what’s been filled in and yellow shows what’s still
               blank. Neither color appears in the PDF.
             </p>
